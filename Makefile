@@ -1,0 +1,17 @@
+GO ?= /home/lwx/.g/go/bin/go
+GOFMT ?= /home/lwx/.g/go/bin/gofmt
+GOFLAGS ?= -tags sqlite_fts5
+
+.PHONY: fmt tidy test build
+
+fmt:
+	$(GOFMT) -w ./cmd ./internal
+
+tidy:
+	$(GO) mod tidy
+
+test:
+	$(GO) $(GOFLAGS) test ./...
+
+build:
+	$(GO) $(GOFLAGS) build -o bin/meminfra ./cmd/meminfra
