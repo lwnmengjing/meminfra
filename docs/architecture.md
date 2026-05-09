@@ -14,8 +14,8 @@ The current implementation is still on track with the original MemInfra directio
 
 The main drift risk is implementation shape, not product direction:
 
-- `cmd/meminfra` is growing beyond argument parsing.
-- `internal/store` is carrying persistence, validation, document projection, and query policy.
+- `cmd/meminfra` has been split by command family, but it still contains command execution flow and text/JSON presentation.
+- `internal/store` is still carrying persistence and some validation/query policy, while memory document projection has moved to `internal/index`.
 - If more features are added directly here, the project will become a CLI tool instead of a reusable memory core.
 
 The next implementation work should restore layering before adding HTTP, MCP, discovery, or reconciliation.
@@ -86,10 +86,9 @@ Relationship examples:
 
 ## Near-Term Implementation Order
 
-1. Keep CLI behavior compatible while shrinking `cmd/meminfra`.
-2. Move memory document projection toward `internal/index`.
-3. Add relationship query helpers for topology-style traversal.
-4. Add MCP only after core interfaces are stable enough to reuse.
+1. Add relationship query helpers for topology-style traversal.
+2. Keep CLI behavior compatible while moving any new output-neutral behavior into `internal/core`.
+3. Add MCP only after core interfaces are stable enough to reuse.
 
 ## Guardrails
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lwnmengjing/ai-infra-operator/internal/index"
 	"github.com/lwnmengjing/ai-infra-operator/internal/model"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -201,7 +202,7 @@ func (s *Store) UpsertResource(ctx context.Context, input ResourceInput) (*model
 		if err := tx.Where("resource_key = ?", input.ResourceKey).First(&resource).Error; err != nil {
 			return err
 		}
-		return upsertMemoryDocument(tx, resourceDocument(resource))
+		return upsertMemoryDocument(tx, index.ResourceDocument(resource))
 	})
 	if err != nil {
 		return nil, err
@@ -246,7 +247,7 @@ func (s *Store) AddObservation(ctx context.Context, input ObservationInput) (*mo
 			return err
 		}
 
-		return upsertMemoryDocument(tx, observationDocument(observation, *resource))
+		return upsertMemoryDocument(tx, index.ObservationDocument(observation, *resource))
 	})
 	if err != nil {
 		return nil, err
@@ -289,7 +290,7 @@ func (s *Store) AddEvent(ctx context.Context, input EventInput) (*model.Event, e
 			return err
 		}
 
-		return upsertMemoryDocument(tx, eventDocument(event, *resource))
+		return upsertMemoryDocument(tx, index.EventDocument(event, *resource))
 	})
 	if err != nil {
 		return nil, err
@@ -329,7 +330,7 @@ func (s *Store) AddIncident(ctx context.Context, input IncidentInput) (*model.In
 		if err := tx.Create(&incident).Error; err != nil {
 			return err
 		}
-		return upsertMemoryDocument(tx, incidentDocument(incident))
+		return upsertMemoryDocument(tx, index.IncidentDocument(incident))
 	})
 	if err != nil {
 		return nil, err
@@ -381,7 +382,7 @@ func (s *Store) AddRelationship(ctx context.Context, input RelationshipInput) (*
 		if err := tx.Create(&relationship).Error; err != nil {
 			return err
 		}
-		return upsertMemoryDocument(tx, relationshipDocument(relationship, *src, *dst))
+		return upsertMemoryDocument(tx, index.RelationshipDocument(relationship, *src, *dst))
 	})
 	if err != nil {
 		return nil, err
@@ -390,7 +391,7 @@ func (s *Store) AddRelationship(ctx context.Context, input RelationshipInput) (*
 }
 
 func (s *Store) Search(ctx context.Context, query string, limit int) ([]model.SearchResult, error) {
-	matchQuery := safeFTSQuery(query)
+	matchQuery := index.SafeFTSQuery(query)
 	if matchQuery == "" {
 		return nil, fmt.Errorf("query is required")
 	}
@@ -611,105 +612,6 @@ func upsertMemoryDocument(tx *gorm.DB, doc model.MemoryDocument) error {
 	return tx.Exec("INSERT INTO memory_fts(rowid, title, body, tags) VALUES (?, ?, ?, ?)", doc.ID, doc.Title, doc.Body, doc.Tags).Error
 }
 
-func resourceDocument(resource model.Resource) model.MemoryDocument {
-	return model.MemoryDocument{
-		DocType: "resource",
-		RefID:   resource.ID,
-		Title:   strings.TrimSpace(strings.Join([]string{resource.Kind, resource.ResourceKey, resource.Hostname}, " ")),
-		Body: strings.TrimSpace(strings.Join([]string{
-			resource.ResourceKey,
-			resource.Kind,
-			resource.Hostname,
-			resource.IPv4,
-			resource.IPv6,
-			resource.Provider,
-			resource.Region,
-			resource.Source,
-			string(resource.MetadataJSON),
-		}, " ")),
-		Tags: strings.TrimSpace(strings.Join([]string{resource.Kind, resource.Provider, resource.Region, resource.Source}, " ")),
-	}
-}
-
-func observationDocument(observation model.Observation, resource model.Resource) model.MemoryDocument {
-	value := fmt.Sprintf("%g", observation.Value)
-	return model.MemoryDocument{
-		DocType: "observation",
-		RefID:   observation.ID,
-		Title:   strings.TrimSpace(strings.Join([]string{resource.ResourceKey, observation.Metric, value, observation.Unit}, " ")),
-		Body: strings.TrimSpace(strings.Join([]string{
-			resource.ResourceKey,
-			resource.Hostname,
-			resource.Provider,
-			resource.Region,
-			observation.Metric,
-			value,
-			observation.Unit,
-			observation.Source,
-			string(observation.MetadataJSON),
-		}, " ")),
-		Tags: strings.TrimSpace(strings.Join([]string{"observation", observation.Metric, observation.Unit, observation.Source}, " ")),
-	}
-}
-
-func eventDocument(event model.Event, resource model.Resource) model.MemoryDocument {
-	return model.MemoryDocument{
-		DocType: "event",
-		RefID:   event.ID,
-		Title:   strings.TrimSpace(strings.Join([]string{resource.ResourceKey, event.EventType}, " ")),
-		Body: strings.TrimSpace(strings.Join([]string{
-			resource.ResourceKey,
-			resource.Hostname,
-			resource.Provider,
-			resource.Region,
-			event.EventType,
-			event.Source,
-			string(event.EventDataJSON),
-		}, " ")),
-		Tags: strings.TrimSpace(strings.Join([]string{"event", event.EventType, event.Source}, " ")),
-	}
-}
-
-func incidentDocument(incident model.Incident) model.MemoryDocument {
-	return model.MemoryDocument{
-		DocType: "incident",
-		RefID:   incident.ID,
-		Title:   incident.Title,
-		Body: strings.TrimSpace(strings.Join([]string{
-			incident.Title,
-			incident.Symptoms,
-			incident.RootCause,
-			incident.Solution,
-			incident.Result,
-			incident.Source,
-			incident.MetadataJSON,
-		}, " ")),
-		Tags: strings.TrimSpace(strings.Join([]string{"incident", incident.Tags, incident.Source}, " ")),
-	}
-}
-
-func relationshipDocument(relationship model.Relationship, src model.Resource, dst model.Resource) model.MemoryDocument {
-	return model.MemoryDocument{
-		DocType: "relationship",
-		RefID:   relationship.ID,
-		Title: strings.TrimSpace(strings.Join([]string{
-			src.ResourceKey,
-			relationship.RelationType,
-			dst.ResourceKey,
-		}, " ")),
-		Body: strings.TrimSpace(strings.Join([]string{
-			src.ResourceKey,
-			src.Hostname,
-			dst.ResourceKey,
-			dst.Hostname,
-			relationship.RelationType,
-			relationship.Source,
-			relationship.MetadataJSON,
-		}, " ")),
-		Tags: strings.TrimSpace(strings.Join([]string{"relationship", relationship.RelationType, relationship.Source}, " ")),
-	}
-}
-
 func defaultSource(source string) string {
 	if strings.TrimSpace(source) == "" {
 		return "manual"
@@ -725,24 +627,4 @@ func normalizeJSON(value string, field string) (string, error) {
 		return "", fmt.Errorf("%s must be valid JSON", field)
 	}
 	return value, nil
-}
-
-func safeFTSQuery(query string) string {
-	tokens := strings.Fields(query)
-	if len(tokens) == 0 {
-		return ""
-	}
-
-	phrases := make([]string, 0, len(tokens))
-	for _, token := range tokens {
-		token = strings.TrimSpace(token)
-		if token == "" {
-			continue
-		}
-		phrases = append(phrases, `"`+strings.ReplaceAll(token, `"`, `""`)+`"`)
-	}
-	if len(phrases) == 0 {
-		return ""
-	}
-	return strings.Join(phrases, " AND ")
 }

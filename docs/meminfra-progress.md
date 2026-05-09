@@ -200,6 +200,8 @@ Progress on 2026-05-09:
 - Review fix: `make test` and `make build` now pass Go subcommand arguments in the correct order.
 - Added `internal/core` as the application service layer. The CLI now depends on core instead of store directly.
 - Added first-class relationship memory with `meminfra relationship add/get/list`, a `relationships` table, FTS indexing, JSON output, and tests.
+- Split `cmd/meminfra` into focused command files by command family plus shared output/common helpers. CLI behavior is unchanged, but future command growth no longer has to pass through one large `main.go`.
+- Added `internal/index` for memory document projection and safe FTS query construction. Store now owns persistence while index owns searchable text shaping.
 
 Smoke database path used:
 
@@ -233,8 +235,6 @@ make test
 
 Next implementation slice:
 
-- Continue shrinking `cmd/meminfra` by moving output-neutral use cases into `internal/core`.
-- Move memory document projection toward `internal/index`.
 - Add topology-style relationship query helpers.
 
 Future larger slices:
