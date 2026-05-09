@@ -240,10 +240,7 @@ func (s *Store) AddEvent(ctx context.Context, input EventInput) (*model.Event, e
 }
 
 func (s *Store) Search(ctx context.Context, query string, limit int) ([]model.SearchResult, error) {
-	matchQuery, err := safeFTSQuery(query)
-	if err != nil {
-		return nil, err
-	}
+	matchQuery := safeFTSQuery(query)
 	if matchQuery == "" {
 		return nil, fmt.Errorf("query is required")
 	}
@@ -252,7 +249,7 @@ func (s *Store) Search(ctx context.Context, query string, limit int) ([]model.Se
 	}
 
 	var results []model.SearchResult
-	err = s.db.WithContext(ctx).Raw(`
+	err := s.db.WithContext(ctx).Raw(`
 SELECT
 	memory_documents.id,
 	memory_documents.doc_type,
@@ -392,10 +389,10 @@ func normalizeJSON(value string, field string) (string, error) {
 	return value, nil
 }
 
-func safeFTSQuery(query string) (string, error) {
+func safeFTSQuery(query string) string {
 	tokens := strings.Fields(query)
 	if len(tokens) == 0 {
-		return "", nil
+		return ""
 	}
 
 	phrases := make([]string, 0, len(tokens))
@@ -407,7 +404,7 @@ func safeFTSQuery(query string) (string, error) {
 		phrases = append(phrases, `"`+strings.ReplaceAll(token, `"`, `""`)+`"`)
 	}
 	if len(phrases) == 0 {
-		return "", nil
+		return ""
 	}
-	return strings.Join(phrases, " AND "), nil
+	return strings.Join(phrases, " AND ")
 }

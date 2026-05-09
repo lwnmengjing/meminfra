@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -9,7 +10,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/lwnmengjing/ai-infra-operator/internal/model"
 	"github.com/lwnmengjing/ai-infra-operator/internal/store"
 )
 
@@ -48,6 +51,7 @@ func run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 func runInit(ctx context.Context, args []string, stdout io.Writer) error {
 	fs := newFlagSet("init", stdout)
 	dbPath := fs.String("db", "meminfra.db", "SQLite database path")
+	output := fs.String("output", "text", "output format: text or json")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -61,12 +65,25 @@ func runInit(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 	defer mem.Close()
 
+	if *output == "json" {
+		return writeJSON(stdout, map[string]any{
+			"status": "initialized",
+			"db":     *dbPath,
+		})
+	}
+	if *output != "text" {
+		return fmt.Errorf("unsupported output format %q", *output)
+	}
 	fmt.Fprintf(stdout, "initialized %s\n", *dbPath)
 	return nil
 }
 
 func runResource(ctx context.Context, args []string, stdout io.Writer) error {
-	if len(args) == 0 || args[0] != "upsert" {
+	if len(args) == 0 || isHelpArg(args[0]) {
+		fmt.Fprintln(stdout, "Usage: meminfra resource upsert --db PATH --key KEY --kind KIND [flags]")
+		return nil
+	}
+	if args[0] != "upsert" {
 		return errors.New("usage: meminfra resource upsert --db PATH --key KEY --kind KIND [flags]")
 	}
 
@@ -81,6 +98,7 @@ func runResource(ctx context.Context, args []string, stdout io.Writer) error {
 	region := fs.String("region", "", "region")
 	source := fs.String("source", "manual", "source")
 	metadata := fs.String("metadata", "", "metadata JSON")
+	output := fs.String("output", "text", "output format: text or json")
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -109,12 +127,22 @@ func runResource(ctx context.Context, args []string, stdout io.Writer) error {
 		return err
 	}
 
+	if *output == "json" {
+		return writeJSON(stdout, newResourceOutput(resource))
+	}
+	if *output != "text" {
+		return fmt.Errorf("unsupported output format %q", *output)
+	}
 	fmt.Fprintf(stdout, "resource %s id=%d\n", resource.ResourceKey, resource.ID)
 	return nil
 }
 
 func runObserve(ctx context.Context, args []string, stdout io.Writer) error {
-	if len(args) == 0 || args[0] != "add" {
+	if len(args) == 0 || isHelpArg(args[0]) {
+		fmt.Fprintln(stdout, "Usage: meminfra observe add --db PATH --resource KEY --metric METRIC --value VALUE [flags]")
+		return nil
+	}
+	if args[0] != "add" {
 		return errors.New("usage: meminfra observe add --db PATH --resource KEY --metric METRIC --value VALUE [flags]")
 	}
 
@@ -126,11 +154,15 @@ func runObserve(ctx context.Context, args []string, stdout io.Writer) error {
 	unit := fs.String("unit", "", "unit")
 	source := fs.String("source", "manual", "source")
 	metadata := fs.String("metadata", "", "metadata JSON")
+	output := fs.String("output", "text", "output format: text or json")
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
+	}
+	if strings.TrimSpace(*value) == "" {
+		return errors.New("--value is required")
 	}
 
 	parsedValue, err := strconv.ParseFloat(*value, 64)
@@ -156,12 +188,22 @@ func runObserve(ctx context.Context, args []string, stdout io.Writer) error {
 		return err
 	}
 
+	if *output == "json" {
+		return writeJSON(stdout, newObservationOutput(observation))
+	}
+	if *output != "text" {
+		return fmt.Errorf("unsupported output format %q", *output)
+	}
 	fmt.Fprintf(stdout, "observation id=%d resource=%s metric=%s value=%g\n", observation.ID, *resourceKey, observation.Metric, observation.Value)
 	return nil
 }
 
 func runEvent(ctx context.Context, args []string, stdout io.Writer) error {
-	if len(args) == 0 || args[0] != "add" {
+	if len(args) == 0 || isHelpArg(args[0]) {
+		fmt.Fprintln(stdout, "Usage: meminfra event add --db PATH --resource KEY --type TYPE [flags]")
+		return nil
+	}
+	if args[0] != "add" {
 		return errors.New("usage: meminfra event add --db PATH --resource KEY --type TYPE [flags]")
 	}
 
@@ -171,6 +213,7 @@ func runEvent(ctx context.Context, args []string, stdout io.Writer) error {
 	eventType := fs.String("type", "", "event type")
 	data := fs.String("data", "", "event data JSON")
 	source := fs.String("source", "manual", "source")
+	output := fs.String("output", "text", "output format: text or json")
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -194,6 +237,12 @@ func runEvent(ctx context.Context, args []string, stdout io.Writer) error {
 		return err
 	}
 
+	if *output == "json" {
+		return writeJSON(stdout, newEventOutput(event))
+	}
+	if *output != "text" {
+		return fmt.Errorf("unsupported output format %q", *output)
+	}
 	fmt.Fprintf(stdout, "event id=%d resource=%s type=%s\n", event.ID, *resourceKey, event.EventType)
 	return nil
 }
@@ -202,6 +251,7 @@ func runSearch(ctx context.Context, args []string, stdout io.Writer) error {
 	fs := newFlagSet("search", stdout)
 	dbPath := fs.String("db", "meminfra.db", "SQLite database path")
 	limit := fs.Int("limit", 10, "result limit")
+	output := fs.String("output", "text", "output format: text or json")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -222,6 +272,12 @@ func runSearch(ctx context.Context, args []string, stdout io.Writer) error {
 	results, err := mem.Search(ctx, query, *limit)
 	if err != nil {
 		return err
+	}
+	if *output == "json" {
+		return writeJSON(stdout, results)
+	}
+	if *output != "text" {
+		return fmt.Errorf("unsupported output format %q", *output)
 	}
 	for _, result := range results {
 		fmt.Fprintf(stdout, "[%s:%d] %s\n%s\n\n", result.DocType, result.RefID, result.Title, result.Body)
@@ -247,6 +303,99 @@ func newFlagSet(name string, output io.Writer) *flag.FlagSet {
 	return fs
 }
 
+func isHelpArg(arg string) bool {
+	return arg == "-h" || arg == "--help" || arg == "help"
+}
+
+func writeJSON(w io.Writer, value any) error {
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(value)
+}
+
+type resourceOutput struct {
+	ID           uint            `json:"id"`
+	ResourceKey  string          `json:"resource_key"`
+	Kind         string          `json:"kind"`
+	Hostname     string          `json:"hostname"`
+	IPv4         string          `json:"ipv4"`
+	IPv6         string          `json:"ipv6"`
+	Provider     string          `json:"provider"`
+	Region       string          `json:"region"`
+	Source       string          `json:"source"`
+	MetadataJSON json.RawMessage `json:"metadata_json"`
+	FirstSeen    time.Time       `json:"first_seen"`
+	LastSeen     time.Time       `json:"last_seen"`
+}
+
+type observationOutput struct {
+	ID           uint            `json:"id"`
+	ResourceID   uint            `json:"resource_id"`
+	Metric       string          `json:"metric"`
+	Value        float64         `json:"value"`
+	Unit         string          `json:"unit"`
+	Source       string          `json:"source"`
+	MetadataJSON json.RawMessage `json:"metadata_json"`
+	ObservedAt   time.Time       `json:"observed_at"`
+}
+
+type eventOutput struct {
+	ID            uint            `json:"id"`
+	ResourceID    uint            `json:"resource_id"`
+	EventType     string          `json:"event_type"`
+	EventDataJSON json.RawMessage `json:"event_data_json"`
+	Source        string          `json:"source"`
+	CreatedAt     time.Time       `json:"created_at"`
+}
+
+func newResourceOutput(resource *model.Resource) resourceOutput {
+	return resourceOutput{
+		ID:           resource.ID,
+		ResourceKey:  resource.ResourceKey,
+		Kind:         resource.Kind,
+		Hostname:     resource.Hostname,
+		IPv4:         resource.IPv4,
+		IPv6:         resource.IPv6,
+		Provider:     resource.Provider,
+		Region:       resource.Region,
+		Source:       resource.Source,
+		MetadataJSON: rawJSON(resource.MetadataJSON),
+		FirstSeen:    resource.FirstSeen,
+		LastSeen:     resource.LastSeen,
+	}
+}
+
+func newObservationOutput(observation *model.Observation) observationOutput {
+	return observationOutput{
+		ID:           observation.ID,
+		ResourceID:   observation.ResourceID,
+		Metric:       observation.Metric,
+		Value:        observation.Value,
+		Unit:         observation.Unit,
+		Source:       observation.Source,
+		MetadataJSON: rawJSON(observation.MetadataJSON),
+		ObservedAt:   observation.ObservedAt,
+	}
+}
+
+func newEventOutput(event *model.Event) eventOutput {
+	return eventOutput{
+		ID:            event.ID,
+		ResourceID:    event.ResourceID,
+		EventType:     event.EventType,
+		EventDataJSON: rawJSON(event.EventDataJSON),
+		Source:        event.Source,
+		CreatedAt:     event.CreatedAt,
+	}
+}
+
+func rawJSON(value string) json.RawMessage {
+	if strings.TrimSpace(value) == "" {
+		return json.RawMessage("null")
+	}
+	return json.RawMessage(value)
+}
+
 func printUsage(w io.Writer) {
 	fmt.Fprintln(w, `meminfra - AI-native infrastructure memory
 
@@ -255,5 +404,7 @@ Commands:
   resource upsert --db PATH --key KEY --kind KIND [--hostname NAME] [--ipv4 IP] [--ipv6 IP] [--provider NAME] [--region NAME]
   observe add --db PATH --resource KEY --metric METRIC --value VALUE [--unit UNIT]
   event add --db PATH --resource KEY --type TYPE [--data JSON]
-  search --db PATH [--limit N] QUERY`)
+  search --db PATH [--limit N] QUERY
+
+All commands support --output text|json.`)
 }

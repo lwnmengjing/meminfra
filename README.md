@@ -21,3 +21,9 @@ provided `Makefile` sets this for `make test` and `make build`.
 /home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra event add --db ./meminfra.db --resource node/frankfurt-01 --type rtt_spike --data '{"region":"fra"}' --source manual
 /home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra search --db ./meminfra.db "Frankfurt RTT"
 ```
+
+For agent-friendly output, add `--output json` to any command:
+
+```zsh
+/home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra search --db ./meminfra.db --output json "Frankfurt RTT"
+```

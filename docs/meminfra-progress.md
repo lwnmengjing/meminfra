@@ -69,6 +69,9 @@ Implemented behavior:
   - Creates searchable event memory documents.
 - `meminfra search`
   - Queries SQLite FTS5 and returns matching memory documents.
+- All commands support `--output text|json`
+  - `text` remains the default for humans.
+  - `json` is intended for Codex/OpenCode/Claude Code and future MCP/HTTP adapters.
 
 ## Data Model
 
@@ -161,6 +164,15 @@ Review fixes applied on 2026-05-08:
 - JSON text fields are strict: invalid `metadata_json` and `event_data_json` inputs are rejected before persistence.
 - Subcommand `-h` output is visible and exits successfully.
 
+Progress on 2026-05-09:
+
+- Added `--output json` support to `init`, `resource upsert`, `observe add`, `event add`, and `search`.
+- Added CLI tests that parse JSON output and verify unsupported output formats fail clearly.
+- Fixed JSON output DTOs so `metadata_json` and `event_data_json` are embedded JSON values, not double-encoded strings.
+- Fixed parent command help for `resource -h`, `observe -h`, and `event -h`.
+- Added a friendly `--value is required` error for `observe add` when no value is supplied.
+- Simplified FTS query builder signature after confirming it cannot currently fail.
+
 Smoke database path used:
 
 ```zsh
@@ -193,7 +205,6 @@ make test
 
 Next implementation slice:
 
-- Add CLI JSON output mode for agent-friendly consumption.
 - Add incident memory as a first-class command and table.
 - Add list/get commands for resources, observations, and events.
 - Add a small query API layer inside `internal/core` before introducing HTTP or MCP.
