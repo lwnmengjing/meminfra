@@ -85,10 +85,10 @@ Relationship examples:
 
 ## Near-Term Implementation Order
 
-1. Introduce `internal/core` and move CLI-facing behavior behind it.
-2. Keep CLI behavior compatible while shrinking `cmd/meminfra`.
-3. Add `relationships` after the core split.
-4. Add relationship search/projection into `memory_documents`.
+1. Keep CLI behavior compatible while shrinking `cmd/meminfra`.
+2. Add `relationships` after the core split.
+3. Add relationship search/projection into `memory_documents`.
+4. Move memory document projection toward `internal/index`.
 5. Add MCP only after core interfaces are stable enough to reuse.
 
 ## Guardrails

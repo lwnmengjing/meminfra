@@ -191,6 +191,7 @@ Progress on 2026-05-09:
 - Review fix: list commands with a missing resource filter now return empty results instead of `resource not found`.
 - Review fix: invalid child command usage now mentions all available subcommands.
 - Review fix: `make test` and `make build` now pass Go subcommand arguments in the correct order.
+- Added `internal/core` as the application service layer. The CLI now depends on core instead of store directly.
 
 Smoke database path used:
 
@@ -224,8 +225,8 @@ make test
 
 Next implementation slice:
 
-- Add a small query API layer inside `internal/core` before introducing HTTP or MCP.
-- Add `relationships` as the next domain model after the core layer split.
+- Add `relationships` as the next domain model now that the first core layer exists.
+- Continue shrinking `cmd/meminfra` by moving output-neutral use cases into `internal/core`.
 
 Future larger slices:
 

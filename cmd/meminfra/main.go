@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lwnmengjing/ai-infra-operator/internal/core"
 	"github.com/lwnmengjing/ai-infra-operator/internal/model"
-	"github.com/lwnmengjing/ai-infra-operator/internal/store"
 )
 
 func main() {
@@ -120,7 +120,7 @@ func runResource(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 	defer mem.Close()
 
-	resource, err := mem.UpsertResource(ctx, store.ResourceInput{
+	resource, err := mem.UpsertResource(ctx, core.ResourceInput{
 		ResourceKey:  *key,
 		Kind:         *kind,
 		Hostname:     *hostname,
@@ -198,7 +198,7 @@ func runResourceList(ctx context.Context, args []string, stdout io.Writer) error
 	}
 	defer mem.Close()
 
-	resources, err := mem.ListResources(ctx, store.ListOptions{Limit: *limit})
+	resources, err := mem.ListResources(ctx, core.ListOptions{Limit: *limit})
 	if err != nil {
 		return err
 	}
@@ -259,7 +259,7 @@ func runObserve(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 	defer mem.Close()
 
-	observation, err := mem.AddObservation(ctx, store.ObservationInput{
+	observation, err := mem.AddObservation(ctx, core.ObservationInput{
 		ResourceKey:  *resourceKey,
 		Metric:       *metric,
 		Value:        parsedValue,
@@ -337,7 +337,7 @@ func runObserveList(ctx context.Context, args []string, stdout io.Writer) error 
 	}
 	defer mem.Close()
 
-	observations, err := mem.ListObservations(ctx, store.ObservationListOptions{
+	observations, err := mem.ListObservations(ctx, core.ObservationListOptions{
 		ResourceKey: *resourceKey,
 		Metric:      *metric,
 		Limit:       *limit,
@@ -392,7 +392,7 @@ func runEvent(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 	defer mem.Close()
 
-	event, err := mem.AddEvent(ctx, store.EventInput{
+	event, err := mem.AddEvent(ctx, core.EventInput{
 		ResourceKey:   *resourceKey,
 		EventType:     *eventType,
 		EventDataJSON: *data,
@@ -468,7 +468,7 @@ func runEventList(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 	defer mem.Close()
 
-	events, err := mem.ListEvents(ctx, store.EventListOptions{
+	events, err := mem.ListEvents(ctx, core.EventListOptions{
 		ResourceKey: *resourceKey,
 		EventType:   *eventType,
 		Limit:       *limit,
@@ -527,7 +527,7 @@ func runIncident(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 	defer mem.Close()
 
-	incident, err := mem.AddIncident(ctx, store.IncidentInput{
+	incident, err := mem.AddIncident(ctx, core.IncidentInput{
 		Title:        *title,
 		Symptoms:     *symptoms,
 		RootCause:    *rootCause,
@@ -605,7 +605,7 @@ func runIncidentList(ctx context.Context, args []string, stdout io.Writer) error
 	}
 	defer mem.Close()
 
-	incidents, err := mem.ListIncidents(ctx, store.IncidentListOptions{Limit: *limit})
+	incidents, err := mem.ListIncidents(ctx, core.IncidentListOptions{Limit: *limit})
 	if err != nil {
 		return err
 	}
@@ -659,16 +659,8 @@ func runSearch(ctx context.Context, args []string, stdout io.Writer) error {
 	return nil
 }
 
-func openAndMigrate(ctx context.Context, dbPath string) (*store.Store, error) {
-	mem, err := store.Open(dbPath)
-	if err != nil {
-		return nil, err
-	}
-	if err := mem.Migrate(ctx); err != nil {
-		mem.Close()
-		return nil, err
-	}
-	return mem, nil
+func openAndMigrate(ctx context.Context, dbPath string) (*core.Service, error) {
+	return core.Open(ctx, dbPath)
 }
 
 func newFlagSet(name string, output io.Writer) *flag.FlagSet {
