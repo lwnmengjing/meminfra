@@ -11,7 +11,7 @@ tidy:
 	$(GO) mod tidy
 
 test:
-	$(GO) $(GOFLAGS) test ./...
+	$(GO) test $(GOFLAGS) ./...
 
 build:
-	$(GO) $(GOFLAGS) build -o bin/meminfra ./cmd/meminfra
+	$(GO) build $(GOFLAGS) -o bin/meminfra ./cmd/meminfra

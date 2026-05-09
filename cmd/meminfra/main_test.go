@@ -284,6 +284,54 @@ func TestGetAndListCommandsReturnJSON(t *testing.T) {
 	if len(incidents) != 1 {
 		t.Fatalf("unexpected incident list: %#v", incidents)
 	}
+
+	stdout.Reset()
+	if err := run(ctx, []string{"observe", "list", "--db", dbPath, "--resource", "node/missing", "--output", "json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("observe list missing resource: %v", err)
+	}
+	var missingObservations []map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &missingObservations); err != nil {
+		t.Fatalf("missing observe list json: %v\n%s", err, stdout.String())
+	}
+	if len(missingObservations) != 0 {
+		t.Fatalf("expected empty missing observation list, got %#v", missingObservations)
+	}
+
+	stdout.Reset()
+	if err := run(ctx, []string{"event", "list", "--db", dbPath, "--resource", "node/missing", "--output", "json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("event list missing resource: %v", err)
+	}
+	var missingEvents []map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &missingEvents); err != nil {
+		t.Fatalf("missing event list json: %v\n%s", err, stdout.String())
+	}
+	if len(missingEvents) != 0 {
+		t.Fatalf("expected empty missing event list, got %#v", missingEvents)
+	}
+}
+
+func TestInvalidSubcommandUsageMentionsAllSubcommands(t *testing.T) {
+	tests := []struct {
+		args     []string
+		expected string
+	}{
+		{args: []string{"resource", "bad"}, expected: "usage: meminfra resource <upsert|get|list> [flags]"},
+		{args: []string{"observe", "bad"}, expected: "usage: meminfra observe <add|get|list> [flags]"},
+		{args: []string{"event", "bad"}, expected: "usage: meminfra event <add|get|list> [flags]"},
+		{args: []string{"incident", "bad"}, expected: "usage: meminfra incident <add|get|list> [flags]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(strings.Join(tt.args, " "), func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			err := run(context.Background(), tt.args, &stdout, &stderr)
+			if err == nil || err.Error() != tt.expected {
+				t.Fatalf("expected %q, got %v", tt.expected, err)
+			}
+		})
+	}
 }
 
 func TestObserveValueIsRequired(t *testing.T) {

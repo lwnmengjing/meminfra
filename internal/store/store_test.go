@@ -273,6 +273,33 @@ func TestGetAndListMethods(t *testing.T) {
 	}
 }
 
+func TestListWithMissingResourceFilterReturnsEmpty(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	observations, err := store.ListObservations(ctx, ObservationListOptions{
+		ResourceKey: "node/missing",
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("list observations with missing resource: %v", err)
+	}
+	if len(observations) != 0 {
+		t.Fatalf("expected empty observations, got %#v", observations)
+	}
+
+	events, err := store.ListEvents(ctx, EventListOptions{
+		ResourceKey: "node/missing",
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("list events with missing resource: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("expected empty events, got %#v", events)
+	}
+}
+
 func TestSearchEscapesFTSSpecialCharacters(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)

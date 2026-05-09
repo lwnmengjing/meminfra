@@ -92,7 +92,7 @@ func runResource(ctx context.Context, args []string, stdout io.Writer) error {
 		return runResourceList(ctx, args[1:], stdout)
 	}
 	if args[0] != "upsert" {
-		return errors.New("usage: meminfra resource upsert --db PATH --key KEY --kind KIND [flags]")
+		return errors.New("usage: meminfra resource <upsert|get|list> [flags]")
 	}
 
 	fs := newFlagSet("resource upsert", stdout)
@@ -226,7 +226,7 @@ func runObserve(ctx context.Context, args []string, stdout io.Writer) error {
 		return runObserveList(ctx, args[1:], stdout)
 	}
 	if args[0] != "add" {
-		return errors.New("usage: meminfra observe add --db PATH --resource KEY --metric METRIC --value VALUE [flags]")
+		return errors.New("usage: meminfra observe <add|get|list> [flags]")
 	}
 
 	fs := newFlagSet("observe add", stdout)
@@ -369,7 +369,7 @@ func runEvent(ctx context.Context, args []string, stdout io.Writer) error {
 		return runEventList(ctx, args[1:], stdout)
 	}
 	if args[0] != "add" {
-		return errors.New("usage: meminfra event add --db PATH --resource KEY --type TYPE [flags]")
+		return errors.New("usage: meminfra event <add|get|list> [flags]")
 	}
 
 	fs := newFlagSet("event add", stdout)
@@ -500,7 +500,7 @@ func runIncident(ctx context.Context, args []string, stdout io.Writer) error {
 		return runIncidentList(ctx, args[1:], stdout)
 	}
 	if args[0] != "add" {
-		return errors.New("usage: meminfra incident add --db PATH --title TITLE [flags]")
+		return errors.New("usage: meminfra incident <add|get|list> [flags]")
 	}
 
 	fs := newFlagSet("incident add", stdout)

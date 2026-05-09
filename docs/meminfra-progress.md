@@ -1,6 +1,6 @@
 # MemInfra Progress Memory
 
-Last updated: 2026-05-08
+Last updated: 2026-05-09
 
 ## Project Memory
 
@@ -187,6 +187,10 @@ Progress on 2026-05-09:
 - Simplified FTS query builder signature after confirming it cannot currently fail.
 - Added first-class incident memory with `meminfra incident add`, an `incidents` table, FTS indexing, JSON output, and tests.
 - Added `get/list` commands and store methods for resources, observations, events, and incidents.
+- Direction calibration: current implementation is still aligned with the original MemInfra MVP, but CLI and store are becoming too large. Next code changes should move business behavior behind `internal/core` before adding more surfaces.
+- Review fix: list commands with a missing resource filter now return empty results instead of `resource not found`.
+- Review fix: invalid child command usage now mentions all available subcommands.
+- Review fix: `make test` and `make build` now pass Go subcommand arguments in the correct order.
 
 Smoke database path used:
 
@@ -221,6 +225,7 @@ make test
 Next implementation slice:
 
 - Add a small query API layer inside `internal/core` before introducing HTTP or MCP.
+- Add `relationships` as the next domain model after the core layer split.
 
 Future larger slices:
 

@@ -12,6 +12,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/gorm/logger"
 )
 
 var (
@@ -92,7 +93,9 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("db path is required")
 	}
 
-	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -376,6 +379,9 @@ func (s *Store) ListObservations(ctx context.Context, options ObservationListOpt
 	query := s.db.WithContext(ctx).Model(&model.Observation{})
 	if strings.TrimSpace(options.ResourceKey) != "" {
 		resource, err := findResource(s.db.WithContext(ctx), options.ResourceKey)
+		if errors.Is(err, ErrResourceNotFound) {
+			return []model.Observation{}, nil
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -409,6 +415,9 @@ func (s *Store) ListEvents(ctx context.Context, options EventListOptions) ([]mod
 	query := s.db.WithContext(ctx).Model(&model.Event{})
 	if strings.TrimSpace(options.ResourceKey) != "" {
 		resource, err := findResource(s.db.WithContext(ctx), options.ResourceKey)
+		if errors.Is(err, ErrResourceNotFound) {
+			return []model.Event{}, nil
+		}
 		if err != nil {
 			return nil, err
 		}
