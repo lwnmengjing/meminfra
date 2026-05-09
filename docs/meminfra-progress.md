@@ -207,6 +207,8 @@ Progress on 2026-05-09:
 - Added MCP tools: `search_memory`, `list_resources`, `get_resource`, `query_topology`, `list_observations`, `list_events`, and `list_incidents`.
 - Updated `make build` to produce both `bin/meminfra` and `bin/meminfra-mcp`.
 - Added `docs/mcp-contract.md` and README MCP setup notes.
+- Added one-click installation scripts: `script/install` for binaries/database plus optional agent setup, and `script/install-agent` for Claude Code, Codex, and OpenCode MCP configuration.
+- Added `docs/install.md` with human and LLM-agent installation flows modeled after agent-friendly open source projects.
 
 Smoke database path used:
 
@@ -242,6 +244,7 @@ Next implementation slice:
 
 - Add MCP write tools only after the read/query contract has been exercised by an agent.
 - Consider separating validation/defaulting from `internal/store` into `internal/core` as the next cleanup step.
+- Before first public release, finalize the GitHub repository URL in installation docs and add release artifacts/checksums.
 
 Future larger slices:
 

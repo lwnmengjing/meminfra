@@ -13,6 +13,35 @@ The current MVP is intentionally local-first:
 FTS5 requires building the SQLite driver with the `sqlite_fts5` tag. The
 provided `Makefile` sets this for `make test` and `make build`.
 
+## Installation
+
+For humans:
+
+```zsh
+script/install
+```
+
+For LLM agents, paste this instruction into Claude Code, Codex, OpenCode, Cursor, or another coding agent:
+
+```text
+Install and configure MemInfra by following:
+https://raw.githubusercontent.com/lwnmengjing/ai-infra-operator/main/docs/install.md
+```
+
+One-line installer for the published repository:
+
+```zsh
+curl -fsSL https://raw.githubusercontent.com/lwnmengjing/ai-infra-operator/main/script/install | sh
+```
+
+Agent-specific install:
+
+```zsh
+script/install-agent --agents claude,codex,opencode --scope user
+```
+
+See [docs/install.md](docs/install.md) for all options.
+
 ## Quick Start
 
 Build the CLI and MCP server:

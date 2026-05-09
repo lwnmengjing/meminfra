@@ -66,6 +66,7 @@ Current:
 - memory_documents
 - memory_fts
 - MCP stdio server for read/query tools
+- one-click local and agent installation scripts
 
 Relationship model:
 
