@@ -100,6 +100,7 @@ claude mcp add --transport stdio --scope user meminfra \
 ```
 
 For project scope without `claude`, the installer writes `.mcp.json`.
+If `.mcp.json` already exists, the installer leaves it unchanged and prints the `meminfra` server snippet to merge manually.
 
 ### Codex
 
@@ -137,6 +138,8 @@ or for project scope:
 ```text
 opencode.jsonc
 ```
+
+If the OpenCode config already exists, the installer leaves it unchanged and prints the `meminfra` server snippet to merge manually.
 
 Configuration:
 

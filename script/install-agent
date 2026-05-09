@@ -78,8 +78,8 @@ install_claude() {
   fi
 
   if [ "$scope" = "project" ]; then
-    write_mcp_json ".mcp.json"
-    echo "claude CLI not found; wrote project .mcp.json instead"
+    write_mcp_json_if_absent ".mcp.json"
+    echo "claude CLI not found; handled project .mcp.json fallback"
     return
   fi
 
@@ -122,14 +122,21 @@ install_opencode() {
   fi
 
   if [ -f "$config" ]; then
-    backup="$config.meminfra.bak"
-    cp "$config" "$backup"
-    echo "Existing OpenCode config found; backup written to $backup"
+    echo "OpenCode config already exists at $config; leaving it unchanged." >&2
+    echo "Add this MCP server entry manually if needed:" >&2
+    print_opencode_snippet >&2
+    return
   fi
 
+  write_opencode_json "$config"
+  echo "Configured OpenCode MCP server in $config"
+}
+
+write_opencode_json() {
+  target="$1"
   escaped_bin="$(json_escape "$bin_path")"
   escaped_db="$(json_escape "$db_path")"
-  cat > "$config" <<EOF
+  cat > "$target" <<EOF
 {
   "\$schema": "https://opencode.ai/config.json",
   "mcp": {
@@ -142,11 +149,16 @@ install_opencode() {
   }
 }
 EOF
-  echo "Configured OpenCode MCP server in $config"
 }
 
-write_mcp_json() {
+write_mcp_json_if_absent() {
   target="$1"
+  if [ -f "$target" ]; then
+    echo "$target already exists; leaving it unchanged." >&2
+    echo "Add this MCP server entry manually if needed:" >&2
+    print_mcp_json_snippet >&2
+    return
+  fi
   escaped_bin="$(json_escape "$bin_path")"
   escaped_db="$(json_escape "$db_path")"
   cat > "$target" <<EOF
@@ -157,6 +169,30 @@ write_mcp_json() {
       "args": ["--db", "$escaped_db"]
     }
   }
+}
+EOF
+}
+
+print_mcp_json_snippet() {
+  escaped_bin="$(json_escape "$bin_path")"
+  escaped_db="$(json_escape "$db_path")"
+  cat <<EOF
+"meminfra": {
+  "command": "$escaped_bin",
+  "args": ["--db", "$escaped_db"]
+}
+EOF
+}
+
+print_opencode_snippet() {
+  escaped_bin="$(json_escape "$bin_path")"
+  escaped_db="$(json_escape "$db_path")"
+  cat <<EOF
+"meminfra": {
+  "type": "local",
+  "enabled": true,
+  "command": "$escaped_bin",
+  "args": ["--db", "$escaped_db"]
 }
 EOF
 }

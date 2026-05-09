@@ -1,8 +1,8 @@
-GO ?= /home/lwx/.g/go/bin/go
-GOFMT ?= /home/lwx/.g/go/bin/gofmt
+GO ?= go
+GOFMT ?= gofmt
 GOFLAGS ?= -tags sqlite_fts5
 
-.PHONY: fmt fmt-check tidy test build install ci
+.PHONY: fmt fmt-check tidy test build install installer-test ci
 
 fmt:
 	$(GOFMT) -w ./cmd ./internal
@@ -23,4 +23,7 @@ build:
 install:
 	script/install --source-dir .
 
-ci: fmt-check test build
+ci: fmt-check installer-test test build
+
+installer-test:
+	sh script/install-agent-test.sh

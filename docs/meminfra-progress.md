@@ -212,6 +212,9 @@ Progress on 2026-05-09:
 - Switched the public module/repository identity to `github.com/mss-boot-io/meminfra`.
 - Added GitHub Actions workflows for PR/main CI, tag release artifacts, CodeQL scanning, and Dependabot updates.
 - Added `docs/ci.md` with recommended `main` branch protection checks.
+- Review fix: agent installer no longer overwrites existing `.mcp.json` or `opencode.jsonc`; it prints merge snippets instead.
+- Review fix: Makefile now defaults to portable `go` and `gofmt` commands.
+- Review fix: search limits are capped consistently and SQLite foreign keys are enabled on open.
 
 Smoke database path used:
 

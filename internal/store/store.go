@@ -130,6 +130,10 @@ func Open(path string) (*Store, error) {
 	}
 	sqlDB.SetMaxOpenConns(1)
 
+	if err := db.Exec("PRAGMA foreign_keys = ON").Error; err != nil {
+		return nil, err
+	}
+
 	return &Store{db: db}, nil
 }
 
@@ -402,9 +406,7 @@ func (s *Store) Search(ctx context.Context, query string, limit int) ([]model.Se
 	if matchQuery == "" {
 		return nil, fmt.Errorf("query is required")
 	}
-	if limit <= 0 {
-		limit = 10
-	}
+	limit = normalizeSearchLimit(limit)
 
 	var results []model.SearchResult
 	err := s.db.WithContext(ctx).Raw(`
@@ -633,6 +635,16 @@ func findResource(db *gorm.DB, key string) (*model.Resource, error) {
 func normalizeLimit(limit int) int {
 	if limit <= 0 {
 		return 50
+	}
+	if limit > 500 {
+		return 500
+	}
+	return limit
+}
+
+func normalizeSearchLimit(limit int) int {
+	if limit <= 0 {
+		return 10
 	}
 	if limit > 500 {
 		return 500

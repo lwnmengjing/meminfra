@@ -26,6 +26,18 @@ func newTestStore(t *testing.T) *Store {
 	return store
 }
 
+func TestOpenEnablesSQLiteForeignKeys(t *testing.T) {
+	store := newTestStore(t)
+
+	var enabled int
+	if err := store.db.Raw("PRAGMA foreign_keys").Scan(&enabled).Error; err != nil {
+		t.Fatalf("read foreign_keys pragma: %v", err)
+	}
+	if enabled != 1 {
+		t.Fatalf("foreign_keys pragma = %d, want 1", enabled)
+	}
+}
+
 func TestUpsertResourcePreservesFirstSeen(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)
@@ -63,6 +75,27 @@ func TestUpsertResourcePreservesFirstSeen(t *testing.T) {
 	}
 	if second.IPv4 != "192.0.2.10" {
 		t.Fatalf("ipv4 not updated: %q", second.IPv4)
+	}
+}
+
+func TestNormalizeSearchLimit(t *testing.T) {
+	tests := []struct {
+		name  string
+		limit int
+		want  int
+	}{
+		{name: "default", limit: 0, want: 10},
+		{name: "negative", limit: -1, want: 10},
+		{name: "keeps positive", limit: 25, want: 25},
+		{name: "caps large", limit: 10000, want: 500},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeSearchLimit(tt.limit); got != tt.want {
+				t.Fatalf("normalizeSearchLimit(%d) = %d, want %d", tt.limit, got, tt.want)
+			}
+		})
 	}
 }
 
