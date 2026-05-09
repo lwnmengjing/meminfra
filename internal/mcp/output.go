@@ -1,19 +1,12 @@
-package main
+package mcp
 
 import (
 	"encoding/json"
-	"io"
 	"strings"
 	"time"
 
 	"github.com/lwnmengjing/ai-infra-operator/internal/model"
 )
-
-func writeJSON(w io.Writer, value any) error {
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(value)
-}
 
 type resourceOutput struct {
 	ID           uint            `json:"id"`
@@ -81,7 +74,17 @@ type topologyEdgeOutput struct {
 	DstResource  resourceOutput     `json:"dst_resource"`
 }
 
-func newResourceOutput(resource *model.Resource) resourceOutput {
+type searchResultOutput struct {
+	ID      uint    `json:"id"`
+	DocType string  `json:"doc_type"`
+	RefID   uint    `json:"ref_id"`
+	Title   string  `json:"title"`
+	Body    string  `json:"body"`
+	Tags    string  `json:"tags"`
+	Rank    float64 `json:"rank"`
+}
+
+func resourceView(resource *model.Resource) resourceOutput {
 	return resourceOutput{
 		ID:           resource.ID,
 		ResourceKey:  resource.ResourceKey,
@@ -98,15 +101,15 @@ func newResourceOutput(resource *model.Resource) resourceOutput {
 	}
 }
 
-func newResourceOutputs(resources []model.Resource) []resourceOutput {
+func resourceViews(resources []model.Resource) []resourceOutput {
 	outputs := make([]resourceOutput, 0, len(resources))
 	for i := range resources {
-		outputs = append(outputs, newResourceOutput(&resources[i]))
+		outputs = append(outputs, resourceView(&resources[i]))
 	}
 	return outputs
 }
 
-func newObservationOutput(observation *model.Observation) observationOutput {
+func observationView(observation *model.Observation) observationOutput {
 	return observationOutput{
 		ID:           observation.ID,
 		ResourceID:   observation.ResourceID,
@@ -119,15 +122,15 @@ func newObservationOutput(observation *model.Observation) observationOutput {
 	}
 }
 
-func newObservationOutputs(observations []model.Observation) []observationOutput {
+func observationViews(observations []model.Observation) []observationOutput {
 	outputs := make([]observationOutput, 0, len(observations))
 	for i := range observations {
-		outputs = append(outputs, newObservationOutput(&observations[i]))
+		outputs = append(outputs, observationView(&observations[i]))
 	}
 	return outputs
 }
 
-func newEventOutput(event *model.Event) eventOutput {
+func eventView(event *model.Event) eventOutput {
 	return eventOutput{
 		ID:            event.ID,
 		ResourceID:    event.ResourceID,
@@ -138,15 +141,15 @@ func newEventOutput(event *model.Event) eventOutput {
 	}
 }
 
-func newEventOutputs(events []model.Event) []eventOutput {
+func eventViews(events []model.Event) []eventOutput {
 	outputs := make([]eventOutput, 0, len(events))
 	for i := range events {
-		outputs = append(outputs, newEventOutput(&events[i]))
+		outputs = append(outputs, eventView(&events[i]))
 	}
 	return outputs
 }
 
-func newIncidentOutput(incident *model.Incident) incidentOutput {
+func incidentView(incident *model.Incident) incidentOutput {
 	return incidentOutput{
 		ID:           incident.ID,
 		Title:        incident.Title,
@@ -162,15 +165,15 @@ func newIncidentOutput(incident *model.Incident) incidentOutput {
 	}
 }
 
-func newIncidentOutputs(incidents []model.Incident) []incidentOutput {
+func incidentViews(incidents []model.Incident) []incidentOutput {
 	outputs := make([]incidentOutput, 0, len(incidents))
 	for i := range incidents {
-		outputs = append(outputs, newIncidentOutput(&incidents[i]))
+		outputs = append(outputs, incidentView(&incidents[i]))
 	}
 	return outputs
 }
 
-func newRelationshipOutput(relationship *model.Relationship) relationshipOutput {
+func relationshipView(relationship *model.Relationship) relationshipOutput {
 	return relationshipOutput{
 		ID:            relationship.ID,
 		SrcResourceID: relationship.SrcResourceID,
@@ -183,26 +186,30 @@ func newRelationshipOutput(relationship *model.Relationship) relationshipOutput 
 	}
 }
 
-func newRelationshipOutputs(relationships []model.Relationship) []relationshipOutput {
-	outputs := make([]relationshipOutput, 0, len(relationships))
-	for i := range relationships {
-		outputs = append(outputs, newRelationshipOutput(&relationships[i]))
+func topologyEdgeViews(edges []model.TopologyEdge) []topologyEdgeOutput {
+	outputs := make([]topologyEdgeOutput, 0, len(edges))
+	for _, edge := range edges {
+		outputs = append(outputs, topologyEdgeOutput{
+			Relationship: relationshipView(&edge.Relationship),
+			SrcResource:  resourceView(&edge.SrcResource),
+			DstResource:  resourceView(&edge.DstResource),
+		})
 	}
 	return outputs
 }
 
-func newTopologyEdgeOutput(edge model.TopologyEdge) topologyEdgeOutput {
-	return topologyEdgeOutput{
-		Relationship: newRelationshipOutput(&edge.Relationship),
-		SrcResource:  newResourceOutput(&edge.SrcResource),
-		DstResource:  newResourceOutput(&edge.DstResource),
-	}
-}
-
-func newTopologyEdgeOutputs(edges []model.TopologyEdge) []topologyEdgeOutput {
-	outputs := make([]topologyEdgeOutput, 0, len(edges))
-	for _, edge := range edges {
-		outputs = append(outputs, newTopologyEdgeOutput(edge))
+func searchResultViews(results []model.SearchResult) []searchResultOutput {
+	outputs := make([]searchResultOutput, 0, len(results))
+	for _, result := range results {
+		outputs = append(outputs, searchResultOutput{
+			ID:      result.ID,
+			DocType: result.DocType,
+			RefID:   result.RefID,
+			Title:   result.Title,
+			Body:    result.Body,
+			Tags:    result.Tags,
+			Rank:    result.Rank,
+		})
 	}
 	return outputs
 }

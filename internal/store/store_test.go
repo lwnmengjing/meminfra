@@ -221,6 +221,69 @@ func TestAddRelationshipStoresRelationshipAndSearchDocument(t *testing.T) {
 	}
 }
 
+func TestQueryTopologyReturnsDirectedEdges(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	for _, key := range []string{"node/frankfurt-01", "node/london-01", "node/paris-01"} {
+		if _, err := store.UpsertResource(ctx, ResourceInput{
+			ResourceKey: key,
+			Kind:        "server",
+			Hostname:    strings.TrimPrefix(key, "node/"),
+		}); err != nil {
+			t.Fatalf("resource %s: %v", key, err)
+		}
+	}
+	if _, err := store.AddRelationship(ctx, RelationshipInput{
+		SrcResourceKey: "node/frankfurt-01",
+		DstResourceKey: "node/london-01",
+		RelationType:   "wg_tunnel",
+	}); err != nil {
+		t.Fatalf("outgoing relationship: %v", err)
+	}
+	if _, err := store.AddRelationship(ctx, RelationshipInput{
+		SrcResourceKey: "node/paris-01",
+		DstResourceKey: "node/frankfurt-01",
+		RelationType:   "service_dependency",
+	}); err != nil {
+		t.Fatalf("incoming relationship: %v", err)
+	}
+
+	outgoing, err := store.QueryTopology(ctx, TopologyQueryOptions{
+		ResourceKey: "node/frankfurt-01",
+		Direction:   "out",
+	})
+	if err != nil {
+		t.Fatalf("query outgoing topology: %v", err)
+	}
+	if len(outgoing) != 1 || outgoing[0].SrcResource.ResourceKey != "node/frankfurt-01" || outgoing[0].DstResource.ResourceKey != "node/london-01" {
+		t.Fatalf("unexpected outgoing edges: %#v", outgoing)
+	}
+
+	incoming, err := store.QueryTopology(ctx, TopologyQueryOptions{
+		ResourceKey: "node/frankfurt-01",
+		Direction:   "in",
+	})
+	if err != nil {
+		t.Fatalf("query incoming topology: %v", err)
+	}
+	if len(incoming) != 1 || incoming[0].SrcResource.ResourceKey != "node/paris-01" || incoming[0].DstResource.ResourceKey != "node/frankfurt-01" {
+		t.Fatalf("unexpected incoming edges: %#v", incoming)
+	}
+
+	wgOnly, err := store.QueryTopology(ctx, TopologyQueryOptions{
+		ResourceKey:  "node/frankfurt-01",
+		RelationType: "wg_tunnel",
+		Direction:    "both",
+	})
+	if err != nil {
+		t.Fatalf("query filtered topology: %v", err)
+	}
+	if len(wgOnly) != 1 || wgOnly[0].Relationship.RelationType != "wg_tunnel" {
+		t.Fatalf("unexpected filtered edges: %#v", wgOnly)
+	}
+}
+
 func TestGetAndListMethods(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)

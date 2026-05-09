@@ -12,7 +12,7 @@ import (
 
 func runRelationship(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) == 0 || isHelpArg(args[0]) {
-		fmt.Fprintln(stdout, "Usage: meminfra relationship <add|get|list> [flags]")
+		fmt.Fprintln(stdout, "Usage: meminfra relationship <add|get|list|topology> [flags]")
 		return nil
 	}
 	if args[0] == "get" {
@@ -21,8 +21,11 @@ func runRelationship(ctx context.Context, args []string, stdout io.Writer) error
 	if args[0] == "list" {
 		return runRelationshipList(ctx, args[1:], stdout)
 	}
+	if args[0] == "topology" {
+		return runRelationshipTopology(ctx, args[1:], stdout)
+	}
 	if args[0] != "add" {
-		return errors.New("usage: meminfra relationship <add|get|list> [flags]")
+		return errors.New("usage: meminfra relationship <add|get|list|topology> [flags]")
 	}
 
 	fs := newFlagSet("relationship add", stdout)
@@ -139,6 +142,48 @@ func runRelationshipList(ctx context.Context, args []string, stdout io.Writer) e
 	}
 	for _, relationship := range relationships {
 		fmt.Fprintf(stdout, "relationship id=%d src_resource_id=%d dst_resource_id=%d type=%s\n", relationship.ID, relationship.SrcResourceID, relationship.DstResourceID, relationship.RelationType)
+	}
+	return nil
+}
+
+func runRelationshipTopology(ctx context.Context, args []string, stdout io.Writer) error {
+	fs := newFlagSet("relationship topology", stdout)
+	dbPath := fs.String("db", "meminfra.db", "SQLite database path")
+	resourceKey := fs.String("resource", "", "resource key")
+	relationType := fs.String("type", "", "relationship type")
+	direction := fs.String("direction", "both", "direction: both, in, or out")
+	limit := fs.Int("limit", 50, "result limit")
+	output := fs.String("output", "text", "output format: text or json")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return err
+	}
+
+	mem, err := openAndMigrate(ctx, *dbPath)
+	if err != nil {
+		return err
+	}
+	defer mem.Close()
+
+	edges, err := mem.QueryTopology(ctx, core.TopologyQueryOptions{
+		ResourceKey:  *resourceKey,
+		RelationType: *relationType,
+		Direction:    *direction,
+		Limit:        *limit,
+	})
+	if err != nil {
+		return err
+	}
+	if *output == "json" {
+		return writeJSON(stdout, newTopologyEdgeOutputs(edges))
+	}
+	if *output != "text" {
+		return fmt.Errorf("unsupported output format %q", *output)
+	}
+	for _, edge := range edges {
+		fmt.Fprintf(stdout, "%s --%s--> %s relationship_id=%d\n", edge.SrcResource.ResourceKey, edge.Relationship.RelationType, edge.DstResource.ResourceKey, edge.Relationship.ID)
 	}
 	return nil
 }

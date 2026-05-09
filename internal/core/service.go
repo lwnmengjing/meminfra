@@ -17,6 +17,7 @@ type ObservationListOptions = store.ObservationListOptions
 type EventListOptions = store.EventListOptions
 type IncidentListOptions = store.IncidentListOptions
 type RelationshipListOptions = store.RelationshipListOptions
+type TopologyQueryOptions = store.TopologyQueryOptions
 
 type Service struct {
 	store *store.Store
@@ -96,6 +97,10 @@ func (s *Service) RelationshipByID(ctx context.Context, id uint) (*model.Relatio
 
 func (s *Service) ListRelationships(ctx context.Context, options RelationshipListOptions) ([]model.Relationship, error) {
 	return s.store.ListRelationships(ctx, options)
+}
+
+func (s *Service) QueryTopology(ctx context.Context, options TopologyQueryOptions) ([]model.TopologyEdge, error) {
+	return s.store.QueryTopology(ctx, options)
 }
 
 func (s *Service) Search(ctx context.Context, query string, limit int) ([]model.SearchResult, error) {

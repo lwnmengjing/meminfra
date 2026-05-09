@@ -345,6 +345,26 @@ func TestGetAndListCommandsReturnJSON(t *testing.T) {
 	}
 
 	stdout.Reset()
+	if err := run(ctx, []string{"relationship", "topology", "--db", dbPath, "--resource", "node/frankfurt-01", "--direction", "out", "--output", "json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("relationship topology: %v", err)
+	}
+	var topology []map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &topology); err != nil {
+		t.Fatalf("relationship topology json: %v\n%s", err, stdout.String())
+	}
+	if len(topology) != 1 {
+		t.Fatalf("unexpected topology: %#v", topology)
+	}
+	src, ok := topology[0]["src_resource"].(map[string]any)
+	if !ok || src["resource_key"] != "node/frankfurt-01" {
+		t.Fatalf("unexpected topology src: %#v", topology)
+	}
+	dst, ok := topology[0]["dst_resource"].(map[string]any)
+	if !ok || dst["resource_key"] != "node/london-01" {
+		t.Fatalf("unexpected topology dst: %#v", topology)
+	}
+
+	stdout.Reset()
 	if err := run(ctx, []string{"observe", "list", "--db", dbPath, "--resource", "node/missing", "--output", "json"}, &stdout, &stderr); err != nil {
 		t.Fatalf("observe list missing resource: %v", err)
 	}
@@ -390,7 +410,7 @@ func TestInvalidSubcommandUsageMentionsAllSubcommands(t *testing.T) {
 		{args: []string{"observe", "bad"}, expected: "usage: meminfra observe <add|get|list> [flags]"},
 		{args: []string{"event", "bad"}, expected: "usage: meminfra event <add|get|list> [flags]"},
 		{args: []string{"incident", "bad"}, expected: "usage: meminfra incident <add|get|list> [flags]"},
-		{args: []string{"relationship", "bad"}, expected: "usage: meminfra relationship <add|get|list> [flags]"},
+		{args: []string{"relationship", "bad"}, expected: "usage: meminfra relationship <add|get|list|topology> [flags]"},
 	}
 
 	for _, tt := range tests {

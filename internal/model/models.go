@@ -88,3 +88,9 @@ type SearchResult struct {
 	Tags    string
 	Rank    float64
 }
+
+type TopologyEdge struct {
+	Relationship Relationship
+	SrcResource  Resource
+	DstResource  Resource
+}

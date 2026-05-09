@@ -62,8 +62,10 @@ Current:
 - events
 - incidents
 - relationships
+- one-hop topology query over relationships
 - memory_documents
 - memory_fts
+- MCP stdio server for read/query tools
 
 Relationship model:
 
@@ -86,9 +88,9 @@ Relationship examples:
 
 ## Near-Term Implementation Order
 
-1. Add relationship query helpers for topology-style traversal.
-2. Keep CLI behavior compatible while moving any new output-neutral behavior into `internal/core`.
-3. Add MCP only after core interfaces are stable enough to reuse.
+1. Exercise the MCP read/query contract from an MCP client.
+2. Keep CLI behavior compatible while moving validation/defaulting toward `internal/core`.
+3. Add MCP write tools only after the read/query surface is stable.
 
 ## Guardrails
 

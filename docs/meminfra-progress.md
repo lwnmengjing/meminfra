@@ -202,6 +202,11 @@ Progress on 2026-05-09:
 - Added first-class relationship memory with `meminfra relationship add/get/list`, a `relationships` table, FTS indexing, JSON output, and tests.
 - Split `cmd/meminfra` into focused command files by command family plus shared output/common helpers. CLI behavior is unchanged, but future command growth no longer has to pass through one large `main.go`.
 - Added `internal/index` for memory document projection and safe FTS query construction. Store now owns persistence while index owns searchable text shaping.
+- Added topology-style relationship query helpers with `QueryTopology` and `meminfra relationship topology`. Supports resource-centered one-hop traversal, `in`/`out`/`both` direction filtering, relationship type filtering, text output, and JSON output.
+- Added a minimal MCP stdio server at `cmd/meminfra-mcp` with `initialize`, `ping`, `tools/list`, and `tools/call`.
+- Added MCP tools: `search_memory`, `list_resources`, `get_resource`, `query_topology`, `list_observations`, `list_events`, and `list_incidents`.
+- Updated `make build` to produce both `bin/meminfra` and `bin/meminfra-mcp`.
+- Added `docs/mcp-contract.md` and README MCP setup notes.
 
 Smoke database path used:
 
@@ -235,7 +240,8 @@ make test
 
 Next implementation slice:
 
-- Add topology-style relationship query helpers.
+- Add MCP write tools only after the read/query contract has been exercised by an agent.
+- Consider separating validation/defaulting from `internal/store` into `internal/core` as the next cleanup step.
 
 Future larger slices:
 

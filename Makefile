@@ -15,3 +15,4 @@ test:
 
 build:
 	$(GO) build $(GOFLAGS) -o bin/meminfra ./cmd/meminfra
+	$(GO) build $(GOFLAGS) -o bin/meminfra-mcp ./cmd/meminfra-mcp

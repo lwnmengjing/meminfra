@@ -105,6 +105,13 @@ type RelationshipListOptions struct {
 	Limit        int
 }
 
+type TopologyQueryOptions struct {
+	ResourceKey  string
+	RelationType string
+	Direction    string
+	Limit        int
+}
+
 func Open(path string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, fmt.Errorf("db path is required")
@@ -562,6 +569,55 @@ func (s *Store) ListRelationships(ctx context.Context, options RelationshipListO
 	return relationships, err
 }
 
+func (s *Store) QueryTopology(ctx context.Context, options TopologyQueryOptions) ([]model.TopologyEdge, error) {
+	if strings.TrimSpace(options.ResourceKey) == "" {
+		return nil, fmt.Errorf("resource key is required")
+	}
+
+	resource, err := findResource(s.db.WithContext(ctx), options.ResourceKey)
+	if errors.Is(err, ErrResourceNotFound) {
+		return []model.TopologyEdge{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	query := s.db.WithContext(ctx).
+		Model(&model.Relationship{}).
+		Preload("SrcResource").
+		Preload("DstResource")
+
+	switch normalizeTopologyDirection(options.Direction) {
+	case "out":
+		query = query.Where("src_resource_id = ?", resource.ID)
+	case "in":
+		query = query.Where("dst_resource_id = ?", resource.ID)
+	default:
+		query = query.Where("src_resource_id = ? OR dst_resource_id = ?", resource.ID, resource.ID)
+	}
+	if strings.TrimSpace(options.RelationType) != "" {
+		query = query.Where("relation_type = ?", options.RelationType)
+	}
+
+	var relationships []model.Relationship
+	if err := query.
+		Order("created_at DESC").
+		Limit(normalizeLimit(options.Limit)).
+		Find(&relationships).Error; err != nil {
+		return nil, err
+	}
+
+	edges := make([]model.TopologyEdge, 0, len(relationships))
+	for _, relationship := range relationships {
+		edges = append(edges, model.TopologyEdge{
+			Relationship: relationship,
+			SrcResource:  relationship.SrcResource,
+			DstResource:  relationship.DstResource,
+		})
+	}
+	return edges, nil
+}
+
 func findResource(db *gorm.DB, key string) (*model.Resource, error) {
 	var resource model.Resource
 	err := db.Where("resource_key = ?", key).First(&resource).Error
@@ -582,6 +638,17 @@ func normalizeLimit(limit int) int {
 		return 500
 	}
 	return limit
+}
+
+func normalizeTopologyDirection(direction string) string {
+	switch strings.ToLower(strings.TrimSpace(direction)) {
+	case "in", "incoming":
+		return "in"
+	case "out", "outgoing":
+		return "out"
+	default:
+		return "both"
+	}
 }
 
 func upsertMemoryDocument(tx *gorm.DB, doc model.MemoryDocument) error {

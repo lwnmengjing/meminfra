@@ -52,7 +52,7 @@ Commands:
   observe add|get|list
   event add|get|list
   incident add|get|list
-  relationship add|get|list
+  relationship add|get|list|topology
   search --db PATH [--limit N] QUERY
 
 All commands support --output text|json.`)
