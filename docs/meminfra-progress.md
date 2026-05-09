@@ -61,12 +61,23 @@ Implemented behavior:
   - Preserves `first_seen`.
   - Updates `last_seen`.
   - Refreshes the resource search document.
+- `meminfra resource get/list`
+  - Reads resources by key or lists recent resources.
 - `meminfra observe add`
   - Records numeric observations for existing resources.
   - Creates searchable observation memory documents.
+- `meminfra observe get/list`
+  - Reads observations by ID or lists recent observations with optional resource/metric filters.
 - `meminfra event add`
   - Records events for existing resources.
   - Creates searchable event memory documents.
+- `meminfra event get/list`
+  - Reads events by ID or lists recent events with optional resource/type filters.
+- `meminfra incident add`
+  - Records operational incident experience.
+  - Creates searchable incident memory documents.
+- `meminfra incident get/list`
+  - Reads incidents by ID or lists recent incidents.
 - `meminfra search`
   - Queries SQLite FTS5 and returns matching memory documents.
 - All commands support `--output text|json`
@@ -83,6 +94,8 @@ Current tables:
   - `resource_id`, `metric`, `value`, `unit`, `source`, `metadata_json`, `observed_at`
 - `events`
   - `resource_id`, `event_type`, `event_data_json`, `source`, `created_at`
+- `incidents`
+  - `title`, `symptoms`, `root_cause`, `solution`, `result`, `tags`, `source`, `metadata_json`, `created_at`, `updated_at`
 - `memory_documents`
   - `doc_type`, `ref_id`, `title`, `body`, `tags`, `created_at`, `updated_at`
 - `memory_fts`
@@ -172,6 +185,8 @@ Progress on 2026-05-09:
 - Fixed parent command help for `resource -h`, `observe -h`, and `event -h`.
 - Added a friendly `--value is required` error for `observe add` when no value is supplied.
 - Simplified FTS query builder signature after confirming it cannot currently fail.
+- Added first-class incident memory with `meminfra incident add`, an `incidents` table, FTS indexing, JSON output, and tests.
+- Added `get/list` commands and store methods for resources, observations, events, and incidents.
 
 Smoke database path used:
 
@@ -205,8 +220,6 @@ make test
 
 Next implementation slice:
 
-- Add incident memory as a first-class command and table.
-- Add list/get commands for resources, observations, and events.
 - Add a small query API layer inside `internal/core` before introducing HTTP or MCP.
 
 Future larger slices:

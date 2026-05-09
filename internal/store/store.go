@@ -14,7 +14,12 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-var ErrResourceNotFound = errors.New("resource not found")
+var (
+	ErrResourceNotFound    = errors.New("resource not found")
+	ErrObservationNotFound = errors.New("observation not found")
+	ErrEventNotFound       = errors.New("event not found")
+	ErrIncidentNotFound    = errors.New("incident not found")
+)
 
 type Store struct {
 	db *gorm.DB
@@ -50,6 +55,38 @@ type EventInput struct {
 	CreatedAt     time.Time
 }
 
+type IncidentInput struct {
+	Title        string
+	Symptoms     string
+	RootCause    string
+	Solution     string
+	Result       string
+	Tags         string
+	Source       string
+	MetadataJSON string
+	CreatedAt    time.Time
+}
+
+type ListOptions struct {
+	Limit int
+}
+
+type ObservationListOptions struct {
+	ResourceKey string
+	Metric      string
+	Limit       int
+}
+
+type EventListOptions struct {
+	ResourceKey string
+	EventType   string
+	Limit       int
+}
+
+type IncidentListOptions struct {
+	Limit int
+}
+
 func Open(path string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, fmt.Errorf("db path is required")
@@ -82,6 +119,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 		&model.Resource{},
 		&model.Observation{},
 		&model.Event{},
+		&model.Incident{},
 		&model.MemoryDocument{},
 	); err != nil {
 		return err
@@ -239,6 +277,46 @@ func (s *Store) AddEvent(ctx context.Context, input EventInput) (*model.Event, e
 	return &event, nil
 }
 
+func (s *Store) AddIncident(ctx context.Context, input IncidentInput) (*model.Incident, error) {
+	if strings.TrimSpace(input.Title) == "" {
+		return nil, fmt.Errorf("incident title is required")
+	}
+	metadata, err := normalizeJSON(input.MetadataJSON, "metadata_json")
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	createdAt := input.CreatedAt.UTC()
+	if createdAt.IsZero() {
+		createdAt = now
+	}
+
+	incident := model.Incident{
+		Title:        input.Title,
+		Symptoms:     input.Symptoms,
+		RootCause:    input.RootCause,
+		Solution:     input.Solution,
+		Result:       input.Result,
+		Tags:         input.Tags,
+		Source:       defaultSource(input.Source),
+		MetadataJSON: metadata,
+		CreatedAt:    createdAt,
+		UpdatedAt:    now,
+	}
+
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&incident).Error; err != nil {
+			return err
+		}
+		return upsertMemoryDocument(tx, incidentDocument(incident))
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &incident, nil
+}
+
 func (s *Store) Search(ctx context.Context, query string, limit int) ([]model.SearchResult, error) {
 	matchQuery := safeFTSQuery(query)
 	if matchQuery == "" {
@@ -273,6 +351,102 @@ func (s *Store) ResourceByKey(ctx context.Context, key string) (*model.Resource,
 	return findResource(s.db.WithContext(ctx), key)
 }
 
+func (s *Store) ListResources(ctx context.Context, options ListOptions) ([]model.Resource, error) {
+	var resources []model.Resource
+	err := s.db.WithContext(ctx).
+		Order("last_seen DESC").
+		Limit(normalizeLimit(options.Limit)).
+		Find(&resources).Error
+	return resources, err
+}
+
+func (s *Store) ObservationByID(ctx context.Context, id uint) (*model.Observation, error) {
+	var observation model.Observation
+	err := s.db.WithContext(ctx).First(&observation, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrObservationNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &observation, nil
+}
+
+func (s *Store) ListObservations(ctx context.Context, options ObservationListOptions) ([]model.Observation, error) {
+	query := s.db.WithContext(ctx).Model(&model.Observation{})
+	if strings.TrimSpace(options.ResourceKey) != "" {
+		resource, err := findResource(s.db.WithContext(ctx), options.ResourceKey)
+		if err != nil {
+			return nil, err
+		}
+		query = query.Where("resource_id = ?", resource.ID)
+	}
+	if strings.TrimSpace(options.Metric) != "" {
+		query = query.Where("metric = ?", options.Metric)
+	}
+
+	var observations []model.Observation
+	err := query.
+		Order("observed_at DESC").
+		Limit(normalizeLimit(options.Limit)).
+		Find(&observations).Error
+	return observations, err
+}
+
+func (s *Store) EventByID(ctx context.Context, id uint) (*model.Event, error) {
+	var event model.Event
+	err := s.db.WithContext(ctx).First(&event, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrEventNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
+func (s *Store) ListEvents(ctx context.Context, options EventListOptions) ([]model.Event, error) {
+	query := s.db.WithContext(ctx).Model(&model.Event{})
+	if strings.TrimSpace(options.ResourceKey) != "" {
+		resource, err := findResource(s.db.WithContext(ctx), options.ResourceKey)
+		if err != nil {
+			return nil, err
+		}
+		query = query.Where("resource_id = ?", resource.ID)
+	}
+	if strings.TrimSpace(options.EventType) != "" {
+		query = query.Where("event_type = ?", options.EventType)
+	}
+
+	var events []model.Event
+	err := query.
+		Order("created_at DESC").
+		Limit(normalizeLimit(options.Limit)).
+		Find(&events).Error
+	return events, err
+}
+
+func (s *Store) IncidentByID(ctx context.Context, id uint) (*model.Incident, error) {
+	var incident model.Incident
+	err := s.db.WithContext(ctx).First(&incident, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrIncidentNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &incident, nil
+}
+
+func (s *Store) ListIncidents(ctx context.Context, options IncidentListOptions) ([]model.Incident, error) {
+	var incidents []model.Incident
+	err := s.db.WithContext(ctx).
+		Order("created_at DESC").
+		Limit(normalizeLimit(options.Limit)).
+		Find(&incidents).Error
+	return incidents, err
+}
+
 func findResource(db *gorm.DB, key string) (*model.Resource, error) {
 	var resource model.Resource
 	err := db.Where("resource_key = ?", key).First(&resource).Error
@@ -283,6 +457,16 @@ func findResource(db *gorm.DB, key string) (*model.Resource, error) {
 		return nil, err
 	}
 	return &resource, nil
+}
+
+func normalizeLimit(limit int) int {
+	if limit <= 0 {
+		return 50
+	}
+	if limit > 500 {
+		return 500
+	}
+	return limit
 }
 
 func upsertMemoryDocument(tx *gorm.DB, doc model.MemoryDocument) error {
@@ -369,6 +553,24 @@ func eventDocument(event model.Event, resource model.Resource) model.MemoryDocum
 			string(event.EventDataJSON),
 		}, " ")),
 		Tags: strings.TrimSpace(strings.Join([]string{"event", event.EventType, event.Source}, " ")),
+	}
+}
+
+func incidentDocument(incident model.Incident) model.MemoryDocument {
+	return model.MemoryDocument{
+		DocType: "incident",
+		RefID:   incident.ID,
+		Title:   incident.Title,
+		Body: strings.TrimSpace(strings.Join([]string{
+			incident.Title,
+			incident.Symptoms,
+			incident.RootCause,
+			incident.Solution,
+			incident.Result,
+			incident.Source,
+			incident.MetadataJSON,
+		}, " ")),
+		Tags: strings.TrimSpace(strings.Join([]string{"incident", incident.Tags, incident.Source}, " ")),
 	}
 }
 

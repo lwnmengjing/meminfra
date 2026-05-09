@@ -41,6 +41,20 @@ type Event struct {
 	CreatedAt     time.Time `gorm:"not null;index"`
 }
 
+type Incident struct {
+	ID           uint      `gorm:"primaryKey"`
+	Title        string    `gorm:"not null;index"`
+	Symptoms     string    `gorm:"type:text"`
+	RootCause    string    `gorm:"column:root_cause;type:text"`
+	Solution     string    `gorm:"type:text"`
+	Result       string    `gorm:"type:text"`
+	Tags         string    `gorm:"index"`
+	Source       string    `gorm:"index"`
+	MetadataJSON string    `gorm:"column:metadata_json;type:text"`
+	CreatedAt    time.Time `gorm:"not null;index"`
+	UpdatedAt    time.Time `gorm:"not null;index"`
+}
+
 type MemoryDocument struct {
 	ID        uint      `gorm:"primaryKey"`
 	DocType   string    `gorm:"not null;index:idx_memory_ref,unique"`

@@ -151,6 +151,128 @@ func TestAddEventStoresEventAndSearchDocument(t *testing.T) {
 	}
 }
 
+func TestAddIncidentStoresIncidentAndSearchDocument(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	incident, err := store.AddIncident(ctx, IncidentInput{
+		Title:        "Frankfurt RTT spike",
+		Symptoms:     "RTT increased from 30ms to 180ms",
+		RootCause:    "OVH upstream congestion",
+		Solution:     "Shift traffic to London",
+		Result:       "Latency recovered",
+		Tags:         "frankfurt rtt ovh",
+		MetadataJSON: `{"region":"fra"}`,
+	})
+	if err != nil {
+		t.Fatalf("add incident: %v", err)
+	}
+	if incident.Title != "Frankfurt RTT spike" || incident.MetadataJSON != `{"region":"fra"}` {
+		t.Fatalf("unexpected incident: %#v", incident)
+	}
+
+	results, err := store.Search(ctx, "OVH congestion", 10)
+	if err != nil {
+		t.Fatalf("search incident: %v", err)
+	}
+	if len(results) != 1 || results[0].DocType != "incident" {
+		t.Fatalf("unexpected search results: %#v", results)
+	}
+}
+
+func TestGetAndListMethods(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	resource, err := store.UpsertResource(ctx, ResourceInput{
+		ResourceKey: "node/frankfurt-01",
+		Kind:        "server",
+		Hostname:    "frankfurt-01",
+	})
+	if err != nil {
+		t.Fatalf("resource: %v", err)
+	}
+	resources, err := store.ListResources(ctx, ListOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("list resources: %v", err)
+	}
+	if len(resources) != 1 || resources[0].ID != resource.ID {
+		t.Fatalf("unexpected resources: %#v", resources)
+	}
+
+	observation, err := store.AddObservation(ctx, ObservationInput{
+		ResourceKey: "node/frankfurt-01",
+		Metric:      "rtt_ms",
+		Value:       82,
+	})
+	if err != nil {
+		t.Fatalf("observation: %v", err)
+	}
+	gotObservation, err := store.ObservationByID(ctx, observation.ID)
+	if err != nil {
+		t.Fatalf("get observation: %v", err)
+	}
+	if gotObservation.ID != observation.ID {
+		t.Fatalf("unexpected observation: %#v", gotObservation)
+	}
+	observations, err := store.ListObservations(ctx, ObservationListOptions{
+		ResourceKey: "node/frankfurt-01",
+		Metric:      "rtt_ms",
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("list observations: %v", err)
+	}
+	if len(observations) != 1 || observations[0].ID != observation.ID {
+		t.Fatalf("unexpected observations: %#v", observations)
+	}
+
+	event, err := store.AddEvent(ctx, EventInput{
+		ResourceKey: "node/frankfurt-01",
+		EventType:   "rtt_spike",
+	})
+	if err != nil {
+		t.Fatalf("event: %v", err)
+	}
+	gotEvent, err := store.EventByID(ctx, event.ID)
+	if err != nil {
+		t.Fatalf("get event: %v", err)
+	}
+	if gotEvent.ID != event.ID {
+		t.Fatalf("unexpected event: %#v", gotEvent)
+	}
+	events, err := store.ListEvents(ctx, EventListOptions{
+		ResourceKey: "node/frankfurt-01",
+		EventType:   "rtt_spike",
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	if len(events) != 1 || events[0].ID != event.ID {
+		t.Fatalf("unexpected events: %#v", events)
+	}
+
+	incident, err := store.AddIncident(ctx, IncidentInput{Title: "Frankfurt RTT spike"})
+	if err != nil {
+		t.Fatalf("incident: %v", err)
+	}
+	gotIncident, err := store.IncidentByID(ctx, incident.ID)
+	if err != nil {
+		t.Fatalf("get incident: %v", err)
+	}
+	if gotIncident.ID != incident.ID {
+		t.Fatalf("unexpected incident: %#v", gotIncident)
+	}
+	incidents, err := store.ListIncidents(ctx, IncidentListOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("list incidents: %v", err)
+	}
+	if len(incidents) != 1 || incidents[0].ID != incident.ID {
+		t.Fatalf("unexpected incidents: %#v", incidents)
+	}
+}
+
 func TestSearchEscapesFTSSpecialCharacters(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)
@@ -218,6 +340,13 @@ func TestRejectsInvalidJSONFields(t *testing.T) {
 		EventDataJSON: "{bad-json}",
 	}); err == nil || !strings.Contains(err.Error(), "event_data_json must be valid JSON") {
 		t.Fatalf("expected invalid event data error, got %v", err)
+	}
+
+	if _, err := store.AddIncident(ctx, IncidentInput{
+		Title:        "Bad incident",
+		MetadataJSON: "{bad-json}",
+	}); err == nil || !strings.Contains(err.Error(), "metadata_json must be valid JSON") {
+		t.Fatalf("expected invalid incident metadata error, got %v", err)
 	}
 }
 
