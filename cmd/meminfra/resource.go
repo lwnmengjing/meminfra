@@ -8,7 +8,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/lwnmengjing/ai-infra-operator/internal/core"
+	"github.com/mss-boot-io/meminfra/internal/core"
 )
 
 func runResource(ctx context.Context, args []string, stdout io.Writer) error {

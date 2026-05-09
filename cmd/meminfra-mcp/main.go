@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/lwnmengjing/ai-infra-operator/internal/mcp"
+	"github.com/mss-boot-io/meminfra/internal/mcp"
 )
 
 func main() {

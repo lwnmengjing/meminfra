@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lwnmengjing/ai-infra-operator/internal/model"
+	"github.com/mss-boot-io/meminfra/internal/model"
 )
 
 type resourceOutput struct {

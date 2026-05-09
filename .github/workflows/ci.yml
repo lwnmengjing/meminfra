@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Check formatting
+        run: make fmt-check GO=go GOFMT=gofmt
+
+      - name: Check module metadata
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Check installer shell syntax
+        run: |
+          sh -n script/install
+          sh -n script/install-agent
+
+      - name: Test
+        run: make test GO=go
+
+      - name: Build
+        run: make build GO=go
+
+      - name: Installer smoke test
+        run: |
+          MEMINFRA_SOURCE_DIR="$PWD" \
+          MEMINFRA_AGENTS=none \
+          MEMINFRA_PREFIX="$RUNNER_TEMP/meminfra" \
+          MEMINFRA_DB="$RUNNER_TEMP/meminfra/share/meminfra.db" \
+          script/install
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: meminfra-linux-amd64
+          path: |
+            bin/meminfra
+            bin/meminfra-mcp
+          if-no-files-found: error

@@ -3,8 +3,8 @@ package core
 import (
 	"context"
 
-	"github.com/lwnmengjing/ai-infra-operator/internal/model"
-	"github.com/lwnmengjing/ai-infra-operator/internal/store"
+	"github.com/mss-boot-io/meminfra/internal/model"
+	"github.com/mss-boot-io/meminfra/internal/store"
 )
 
 type ResourceInput = store.ResourceInput

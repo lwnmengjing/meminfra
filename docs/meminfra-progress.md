@@ -209,6 +209,9 @@ Progress on 2026-05-09:
 - Added `docs/mcp-contract.md` and README MCP setup notes.
 - Added one-click installation scripts: `script/install` for binaries/database plus optional agent setup, and `script/install-agent` for Claude Code, Codex, and OpenCode MCP configuration.
 - Added `docs/install.md` with human and LLM-agent installation flows modeled after agent-friendly open source projects.
+- Switched the public module/repository identity to `github.com/mss-boot-io/meminfra`.
+- Added GitHub Actions workflows for PR/main CI, tag release artifacts, CodeQL scanning, and Dependabot updates.
+- Added `docs/ci.md` with recommended `main` branch protection checks.
 
 Smoke database path used:
 

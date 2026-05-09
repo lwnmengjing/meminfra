@@ -13,14 +13,7 @@ script/install
 From a published repository, the intended one-line installer is:
 
 ```zsh
-curl -fsSL https://raw.githubusercontent.com/lwnmengjing/ai-infra-operator/main/script/install | sh
-```
-
-Until the public repository URL is final, override it explicitly:
-
-```zsh
-curl -fsSL https://raw.githubusercontent.com/lwnmengjing/ai-infra-operator/main/script/install \
-  | MEMINFRA_REPO=https://github.com/lwnmengjing/ai-infra-operator.git sh
+curl -fsSL https://raw.githubusercontent.com/mss-boot-io/meminfra/main/script/install | sh
 ```
 
 Default install locations:
@@ -37,7 +30,7 @@ Fetch and follow this guide:
 
 ```text
 Install MemInfra by reading:
-https://raw.githubusercontent.com/lwnmengjing/ai-infra-operator/main/docs/install.md
+https://raw.githubusercontent.com/mss-boot-io/meminfra/main/docs/install.md
 ```
 
 Preferred command from an existing checkout:

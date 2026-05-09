@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lwnmengjing/ai-infra-operator/internal/index"
-	"github.com/lwnmengjing/ai-infra-operator/internal/model"
+	"github.com/mss-boot-io/meminfra/internal/index"
+	"github.com/mss-boot-io/meminfra/internal/model"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

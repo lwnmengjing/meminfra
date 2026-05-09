@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lwnmengjing/ai-infra-operator/internal/core"
+	"github.com/mss-boot-io/meminfra/internal/core"
 )
 
 func runIncident(ctx context.Context, args []string, stdout io.Writer) error {

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lwnmengjing/ai-infra-operator/internal/core"
+	"github.com/mss-boot-io/meminfra/internal/core"
 )
 
 func TestServerListsAndCallsTools(t *testing.T) {

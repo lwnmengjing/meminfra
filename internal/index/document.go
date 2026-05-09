@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lwnmengjing/ai-infra-operator/internal/model"
+	"github.com/mss-boot-io/meminfra/internal/model"
 )
 
 func ResourceDocument(resource model.Resource) model.MemoryDocument {

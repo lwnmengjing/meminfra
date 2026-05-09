@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lwnmengjing/ai-infra-operator/internal/model"
+	"github.com/mss-boot-io/meminfra/internal/model"
 )
 
 func TestRelationshipDocumentIncludesBothEndpointsAndType(t *testing.T) {

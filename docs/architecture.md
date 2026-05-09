@@ -67,6 +67,7 @@ Current:
 - memory_fts
 - MCP stdio server for read/query tools
 - one-click local and agent installation scripts
+- GitHub Actions CI/release/security automation for open source distribution
 
 Relationship model:
 

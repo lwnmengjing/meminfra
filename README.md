@@ -25,13 +25,13 @@ For LLM agents, paste this instruction into Claude Code, Codex, OpenCode, Cursor
 
 ```text
 Install and configure MemInfra by following:
-https://raw.githubusercontent.com/lwnmengjing/ai-infra-operator/main/docs/install.md
+https://raw.githubusercontent.com/mss-boot-io/meminfra/main/docs/install.md
 ```
 
 One-line installer for the published repository:
 
 ```zsh
-curl -fsSL https://raw.githubusercontent.com/lwnmengjing/ai-infra-operator/main/script/install | sh
+curl -fsSL https://raw.githubusercontent.com/mss-boot-io/meminfra/main/script/install | sh
 ```
 
 Agent-specific install:
@@ -41,6 +41,21 @@ script/install-agent --agents claude,codex,opencode --scope user
 ```
 
 See [docs/install.md](docs/install.md) for all options.
+
+## CI/CD
+
+This repository ships with GitHub Actions for PR checks, main branch validation, release artifacts, CodeQL scanning, and Dependabot updates.
+
+Required checks recommended for `main`:
+
+```text
+CI / Validate
+CodeQL / Analyze Go
+```
+
+Release artifacts are built from tags such as `v0.1.0`.
+
+See [docs/ci.md](docs/ci.md).
 
 ## Quick Start
 
@@ -102,10 +117,10 @@ Example MCP client configuration:
 {
   "mcpServers": {
     "meminfra": {
-      "command": "/home/lwx/go/src/github.com/lwnmengjing/ai-infra-operator/bin/meminfra-mcp",
+      "command": "/home/lwx/go/src/github.com/mss-boot-io/meminfra/bin/meminfra-mcp",
       "args": [
         "--db",
-        "/home/lwx/go/src/github.com/lwnmengjing/ai-infra-operator/meminfra.db"
+        "/home/lwx/go/src/github.com/mss-boot-io/meminfra/meminfra.db"
       ]
     }
   }

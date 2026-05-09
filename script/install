@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-repo_url="${MEMINFRA_REPO:-https://github.com/lwnmengjing/ai-infra-operator.git}"
+repo_url="${MEMINFRA_REPO:-https://github.com/mss-boot-io/meminfra.git}"
 ref="${MEMINFRA_REF:-main}"
 prefix="${MEMINFRA_PREFIX:-$HOME/.local}"
 db_path="${MEMINFRA_DB:-$HOME/.local/share/meminfra/meminfra.db}"
