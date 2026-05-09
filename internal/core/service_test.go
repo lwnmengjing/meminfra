@@ -25,12 +25,26 @@ func TestServiceOpenWriteAndSearch(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("upsert resource: %v", err)
 	}
+	if _, err := service.UpsertResource(ctx, ResourceInput{
+		ResourceKey: "node/london-01",
+		Kind:        "server",
+		Hostname:    "london-01",
+	}); err != nil {
+		t.Fatalf("upsert second resource: %v", err)
+	}
+	if _, err := service.AddRelationship(ctx, RelationshipInput{
+		SrcResourceKey: "node/frankfurt-01",
+		DstResourceKey: "node/london-01",
+		RelationType:   "wg_tunnel",
+	}); err != nil {
+		t.Fatalf("add relationship: %v", err)
+	}
 
-	results, err := service.Search(ctx, "frankfurt", 10)
+	results, err := service.Search(ctx, "frankfurt wg_tunnel", 10)
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}
-	if len(results) != 1 || results[0].DocType != "resource" {
+	if len(results) != 1 || results[0].DocType != "relationship" {
 		t.Fatalf("unexpected search results: %#v", results)
 	}
 }

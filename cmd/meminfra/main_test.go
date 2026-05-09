@@ -181,6 +181,16 @@ func TestGetAndListCommandsReturnJSON(t *testing.T) {
 	if len(resources) != 1 {
 		t.Fatalf("unexpected resource list: %#v", resources)
 	}
+	stdout.Reset()
+	if err := run(ctx, []string{
+		"resource", "upsert",
+		"--db", dbPath,
+		"--key", "node/london-01",
+		"--kind", "server",
+		"--hostname", "london-01",
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("second resource upsert: %v", err)
+	}
 
 	stdout.Reset()
 	if err := run(ctx, []string{
@@ -286,6 +296,55 @@ func TestGetAndListCommandsReturnJSON(t *testing.T) {
 	}
 
 	stdout.Reset()
+	if err := run(ctx, []string{
+		"relationship", "add",
+		"--db", dbPath,
+		"--src", "node/frankfurt-01",
+		"--dst", "node/london-01",
+		"--type", "wg_tunnel",
+		"--metadata", `{"interface":"wg0"}`,
+		"--output", "json",
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("relationship add: %v", err)
+	}
+	relationshipID := jsonID(t, stdout.Bytes())
+	var relationship map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &relationship); err != nil {
+		t.Fatalf("relationship json: %v\n%s", err, stdout.String())
+	}
+	if relationship["relation_type"] != "wg_tunnel" {
+		t.Fatalf("unexpected relationship: %#v", relationship)
+	}
+	relationshipMetadata, ok := relationship["metadata_json"].(map[string]any)
+	if !ok || relationshipMetadata["interface"] != "wg0" {
+		t.Fatalf("relationship metadata_json should be embedded JSON, got %#v", relationship["metadata_json"])
+	}
+
+	stdout.Reset()
+	if err := run(ctx, []string{"relationship", "get", "--db", dbPath, "--id", relationshipID, "--output", "json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("relationship get: %v", err)
+	}
+	var gotRelationship map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &gotRelationship); err != nil {
+		t.Fatalf("relationship get json: %v\n%s", err, stdout.String())
+	}
+	if gotRelationship["relation_type"] != "wg_tunnel" {
+		t.Fatalf("unexpected relationship get: %#v", gotRelationship)
+	}
+
+	stdout.Reset()
+	if err := run(ctx, []string{"relationship", "list", "--db", dbPath, "--resource", "node/frankfurt-01", "--type", "wg_tunnel", "--output", "json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("relationship list: %v", err)
+	}
+	var relationships []map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &relationships); err != nil {
+		t.Fatalf("relationship list json: %v\n%s", err, stdout.String())
+	}
+	if len(relationships) != 1 {
+		t.Fatalf("unexpected relationship list: %#v", relationships)
+	}
+
+	stdout.Reset()
 	if err := run(ctx, []string{"observe", "list", "--db", dbPath, "--resource", "node/missing", "--output", "json"}, &stdout, &stderr); err != nil {
 		t.Fatalf("observe list missing resource: %v", err)
 	}
@@ -308,6 +367,18 @@ func TestGetAndListCommandsReturnJSON(t *testing.T) {
 	if len(missingEvents) != 0 {
 		t.Fatalf("expected empty missing event list, got %#v", missingEvents)
 	}
+
+	stdout.Reset()
+	if err := run(ctx, []string{"relationship", "list", "--db", dbPath, "--resource", "node/missing", "--output", "json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("relationship list missing resource: %v", err)
+	}
+	var missingRelationships []map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &missingRelationships); err != nil {
+		t.Fatalf("missing relationship list json: %v\n%s", err, stdout.String())
+	}
+	if len(missingRelationships) != 0 {
+		t.Fatalf("expected empty missing relationship list, got %#v", missingRelationships)
+	}
 }
 
 func TestInvalidSubcommandUsageMentionsAllSubcommands(t *testing.T) {
@@ -319,6 +390,7 @@ func TestInvalidSubcommandUsageMentionsAllSubcommands(t *testing.T) {
 		{args: []string{"observe", "bad"}, expected: "usage: meminfra observe <add|get|list> [flags]"},
 		{args: []string{"event", "bad"}, expected: "usage: meminfra event <add|get|list> [flags]"},
 		{args: []string{"incident", "bad"}, expected: "usage: meminfra incident <add|get|list> [flags]"},
+		{args: []string{"relationship", "bad"}, expected: "usage: meminfra relationship <add|get|list> [flags]"},
 	}
 
 	for _, tt := range tests {

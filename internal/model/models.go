@@ -55,6 +55,19 @@ type Incident struct {
 	UpdatedAt    time.Time `gorm:"not null;index"`
 }
 
+type Relationship struct {
+	ID            uint      `gorm:"primaryKey"`
+	SrcResourceID uint      `gorm:"not null;index"`
+	SrcResource   Resource  `gorm:"foreignKey:SrcResourceID;constraint:OnDelete:CASCADE"`
+	DstResourceID uint      `gorm:"not null;index"`
+	DstResource   Resource  `gorm:"foreignKey:DstResourceID;constraint:OnDelete:CASCADE"`
+	RelationType  string    `gorm:"not null;index"`
+	Source        string    `gorm:"index"`
+	MetadataJSON  string    `gorm:"column:metadata_json;type:text"`
+	CreatedAt     time.Time `gorm:"not null;index"`
+	UpdatedAt     time.Time `gorm:"not null;index"`
+}
+
 type MemoryDocument struct {
 	ID        uint      `gorm:"primaryKey"`
 	DocType   string    `gorm:"not null;index:idx_memory_ref,unique"`

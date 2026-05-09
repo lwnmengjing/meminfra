@@ -11,10 +11,12 @@ type ResourceInput = store.ResourceInput
 type ObservationInput = store.ObservationInput
 type EventInput = store.EventInput
 type IncidentInput = store.IncidentInput
+type RelationshipInput = store.RelationshipInput
 type ListOptions = store.ListOptions
 type ObservationListOptions = store.ObservationListOptions
 type EventListOptions = store.EventListOptions
 type IncidentListOptions = store.IncidentListOptions
+type RelationshipListOptions = store.RelationshipListOptions
 
 type Service struct {
 	store *store.Store
@@ -82,6 +84,18 @@ func (s *Service) IncidentByID(ctx context.Context, id uint) (*model.Incident, e
 
 func (s *Service) ListIncidents(ctx context.Context, options IncidentListOptions) ([]model.Incident, error) {
 	return s.store.ListIncidents(ctx, options)
+}
+
+func (s *Service) AddRelationship(ctx context.Context, input RelationshipInput) (*model.Relationship, error) {
+	return s.store.AddRelationship(ctx, input)
+}
+
+func (s *Service) RelationshipByID(ctx context.Context, id uint) (*model.Relationship, error) {
+	return s.store.RelationshipByID(ctx, id)
+}
+
+func (s *Service) ListRelationships(ctx context.Context, options RelationshipListOptions) ([]model.Relationship, error) {
+	return s.store.ListRelationships(ctx, options)
 }
 
 func (s *Service) Search(ctx context.Context, query string, limit int) ([]model.SearchResult, error) {

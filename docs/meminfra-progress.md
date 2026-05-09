@@ -36,7 +36,7 @@ The active MVP is intentionally small:
 - No MCP adapter.
 - No discovery engine.
 - No reconciliation loop.
-- No incident workflow beyond the generic searchable memory document foundation.
+- Incident memory and relationship memory are implemented as first-class local memory surfaces, but there is no automated RCA workflow yet.
 
 ## Implemented So Far
 
@@ -78,6 +78,11 @@ Implemented behavior:
   - Creates searchable incident memory documents.
 - `meminfra incident get/list`
   - Reads incidents by ID or lists recent incidents.
+- `meminfra relationship add`
+  - Records infrastructure relationships between two resources.
+  - Creates searchable relationship memory documents.
+- `meminfra relationship get/list`
+  - Reads relationships by ID or lists recent relationships with optional resource/type filters.
 - `meminfra search`
   - Queries SQLite FTS5 and returns matching memory documents.
 - All commands support `--output text|json`
@@ -96,6 +101,8 @@ Current tables:
   - `resource_id`, `event_type`, `event_data_json`, `source`, `created_at`
 - `incidents`
   - `title`, `symptoms`, `root_cause`, `solution`, `result`, `tags`, `source`, `metadata_json`, `created_at`, `updated_at`
+- `relationships`
+  - `src_resource_id`, `dst_resource_id`, `relation_type`, `source`, `metadata_json`, `created_at`, `updated_at`
 - `memory_documents`
   - `doc_type`, `ref_id`, `title`, `body`, `tags`, `created_at`, `updated_at`
 - `memory_fts`
@@ -192,6 +199,7 @@ Progress on 2026-05-09:
 - Review fix: invalid child command usage now mentions all available subcommands.
 - Review fix: `make test` and `make build` now pass Go subcommand arguments in the correct order.
 - Added `internal/core` as the application service layer. The CLI now depends on core instead of store directly.
+- Added first-class relationship memory with `meminfra relationship add/get/list`, a `relationships` table, FTS indexing, JSON output, and tests.
 
 Smoke database path used:
 
@@ -206,7 +214,7 @@ Smoke database path used:
 - Raw SQL is used for FTS5 virtual table creation and search.
 - JSON payload fields are stored as `text` columns for now.
 - No `gorm.io/datatypes` dependency is used in the current implementation.
-- The MVP stores resource, observation, and event content into generic `memory_documents` so future incident memory and MCP retrieval can build on the same search surface.
+- The MVP stores resource, observation, event, incident, and relationship content into generic `memory_documents` so future MCP retrieval can build on the same search surface.
 
 ## Current Git State
 
@@ -225,8 +233,9 @@ make test
 
 Next implementation slice:
 
-- Add `relationships` as the next domain model now that the first core layer exists.
 - Continue shrinking `cmd/meminfra` by moving output-neutral use cases into `internal/core`.
+- Move memory document projection toward `internal/index`.
+- Add topology-style relationship query helpers.
 
 Future larger slices:
 

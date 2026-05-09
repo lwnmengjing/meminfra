@@ -20,6 +20,8 @@ provided `Makefile` sets this for `make test` and `make build`.
 /home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra observe add --db ./meminfra.db --resource node/frankfurt-01 --metric rtt_ms --value 82 --unit ms --source manual
 /home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra event add --db ./meminfra.db --resource node/frankfurt-01 --type rtt_spike --data '{"region":"fra"}' --source manual
 /home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra incident add --db ./meminfra.db --title "Frankfurt RTT spike" --symptoms "RTT increased" --root-cause "OVH upstream congestion" --solution "Shift traffic to London" --result "Latency recovered" --tags "frankfurt rtt ovh"
+/home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra resource upsert --db ./meminfra.db --key node/london-01 --kind server --hostname london-01
+/home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra relationship add --db ./meminfra.db --src node/frankfurt-01 --dst node/london-01 --type wg_tunnel --metadata '{"interface":"wg0"}'
 /home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra search --db ./meminfra.db "Frankfurt RTT"
 ```
 
@@ -31,6 +33,7 @@ Useful query commands:
 /home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra observe list --db ./meminfra.db --resource node/frankfurt-01 --metric rtt_ms --output json
 /home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra event list --db ./meminfra.db --resource node/frankfurt-01 --type rtt_spike --output json
 /home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra incident list --db ./meminfra.db --output json
+/home/lwx/.g/go/bin/go run -tags sqlite_fts5 ./cmd/meminfra relationship list --db ./meminfra.db --resource node/frankfurt-01 --type wg_tunnel --output json
 ```
 
 For agent-friendly output, add `--output json` to any command:

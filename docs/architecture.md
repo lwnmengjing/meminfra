@@ -10,7 +10,7 @@ The current implementation is still on track with the original MemInfra directio
 - Local-first SQLite database.
 - FTS5-backed retrieval.
 - CLI and JSON output for agents.
-- Resources, observations, events, and incidents as the first memory surfaces.
+- Resources, observations, events, incidents, and relationships as the first memory surfaces.
 
 The main drift risk is implementation shape, not product direction:
 
@@ -61,10 +61,11 @@ Current:
 - observations
 - events
 - incidents
+- relationships
 - memory_documents
 - memory_fts
 
-Next domain model:
+Relationship model:
 
 - relationships
   - `src_resource_id`
@@ -86,10 +87,9 @@ Relationship examples:
 ## Near-Term Implementation Order
 
 1. Keep CLI behavior compatible while shrinking `cmd/meminfra`.
-2. Add `relationships` after the core split.
-3. Add relationship search/projection into `memory_documents`.
-4. Move memory document projection toward `internal/index`.
-5. Add MCP only after core interfaces are stable enough to reuse.
+2. Move memory document projection toward `internal/index`.
+3. Add relationship query helpers for topology-style traversal.
+4. Add MCP only after core interfaces are stable enough to reuse.
 
 ## Guardrails
 
