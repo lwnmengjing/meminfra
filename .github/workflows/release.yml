@@ -45,7 +45,7 @@ jobs:
           (cd dist && sha256sum "$package.tar.gz" > checksums.txt)
 
       - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: meminfra-release-linux-amd64
           path: |
