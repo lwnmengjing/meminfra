@@ -1,0 +1,208 @@
+#!/usr/bin/env sh
+set -eu
+
+agents="${MEMINFRA_AGENTS:-all}"
+scope="${MEMINFRA_AGENT_SCOPE:-user}"
+bin_path="${MEMINFRA_MCP_BIN:-$HOME/.local/bin/meminfra-mcp}"
+db_path="${MEMINFRA_DB:-$HOME/.local/share/meminfra/meminfra.db}"
+
+usage() {
+  cat <<'USAGE'
+Usage: script/install-agent [options]
+
+Options:
+  --agents LIST     Comma-separated agents: all,claude,codex,opencode. Default: all
+  --scope SCOPE     Config scope: user or project. Default: user
+  --bin PATH        Path to meminfra-mcp binary. Default: ~/.local/bin/meminfra-mcp
+  --db PATH         SQLite database path. Default: ~/.local/share/meminfra/meminfra.db
+  -h, --help        Show help
+USAGE
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --agents)
+      agents="$2"
+      shift 2
+      ;;
+    --scope)
+      scope="$2"
+      shift 2
+      ;;
+    --bin)
+      bin_path="$2"
+      shift 2
+      ;;
+    --db)
+      db_path="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+case "$scope" in
+  user|project) ;;
+  *)
+    echo "--scope must be user or project" >&2
+    exit 2
+    ;;
+esac
+
+has_agent() {
+  case ",$agents," in
+    *,all,*|*,"$1",*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+json_escape() {
+  sed 's/\\/\\\\/g; s/"/\\"/g' <<EOF
+$1
+EOF
+}
+
+install_claude() {
+  if command -v claude >/dev/null 2>&1; then
+    claude mcp add --transport stdio --scope "$scope" meminfra -- "$bin_path" --db "$db_path"
+    echo "Configured Claude Code MCP server: meminfra"
+    return
+  fi
+
+  if [ "$scope" = "project" ]; then
+    write_mcp_json_if_absent ".mcp.json"
+    echo "claude CLI not found; handled project .mcp.json fallback"
+    return
+  fi
+
+  echo "Skipping Claude Code: claude CLI not found. Re-run after installing Claude Code." >&2
+}
+
+install_codex() {
+  if [ "$scope" = "project" ]; then
+    mkdir -p ".codex"
+    config=".codex/config.toml"
+  else
+    mkdir -p "$HOME/.codex"
+    config="$HOME/.codex/config.toml"
+  fi
+  touch "$config"
+
+  tmp="$(mktemp)"
+  awk '
+    /^\[mcp_servers\.meminfra\]$/ { skip=1; next }
+    skip && /^\[/ { skip=0 }
+    !skip { print }
+  ' "$config" > "$tmp"
+  cat >> "$tmp" <<EOF
+
+[mcp_servers.meminfra]
+command = "$bin_path"
+args = ["--db", "$db_path"]
+supports_parallel_tool_calls = true
+EOF
+  mv "$tmp" "$config"
+  echo "Configured Codex MCP server in $config"
+}
+
+install_opencode() {
+  if [ "$scope" = "project" ]; then
+    config="opencode.jsonc"
+  else
+    mkdir -p "$HOME/.config/opencode"
+    config="$HOME/.config/opencode/opencode.jsonc"
+  fi
+
+  if [ -f "$config" ]; then
+    echo "OpenCode config already exists at $config; leaving it unchanged." >&2
+    echo "Add this MCP server entry manually if needed:" >&2
+    print_opencode_snippet >&2
+    return
+  fi
+
+  write_opencode_json "$config"
+  echo "Configured OpenCode MCP server in $config"
+}
+
+write_opencode_json() {
+  target="$1"
+  escaped_bin="$(json_escape "$bin_path")"
+  escaped_db="$(json_escape "$db_path")"
+  cat > "$target" <<EOF
+{
+  "\$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "meminfra": {
+      "type": "local",
+      "enabled": true,
+      "command": "$escaped_bin",
+      "args": ["--db", "$escaped_db"]
+    }
+  }
+}
+EOF
+}
+
+write_mcp_json_if_absent() {
+  target="$1"
+  if [ -f "$target" ]; then
+    echo "$target already exists; leaving it unchanged." >&2
+    echo "Add this MCP server entry manually if needed:" >&2
+    print_mcp_json_snippet >&2
+    return
+  fi
+  escaped_bin="$(json_escape "$bin_path")"
+  escaped_db="$(json_escape "$db_path")"
+  cat > "$target" <<EOF
+{
+  "mcpServers": {
+    "meminfra": {
+      "command": "$escaped_bin",
+      "args": ["--db", "$escaped_db"]
+    }
+  }
+}
+EOF
+}
+
+print_mcp_json_snippet() {
+  escaped_bin="$(json_escape "$bin_path")"
+  escaped_db="$(json_escape "$db_path")"
+  cat <<EOF
+"meminfra": {
+  "command": "$escaped_bin",
+  "args": ["--db", "$escaped_db"]
+}
+EOF
+}
+
+print_opencode_snippet() {
+  escaped_bin="$(json_escape "$bin_path")"
+  escaped_db="$(json_escape "$db_path")"
+  cat <<EOF
+"meminfra": {
+  "type": "local",
+  "enabled": true,
+  "command": "$escaped_bin",
+  "args": ["--db", "$escaped_db"]
+}
+EOF
+}
+
+if has_agent claude; then
+  install_claude
+fi
+if has_agent codex; then
+  install_codex
+fi
+if has_agent opencode; then
+  install_opencode
+fi

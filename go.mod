@@ -1,4 +1,4 @@
-module github.com/lwnmengjing/ai-infra-operator
+module github.com/mss-boot-io/meminfra
 
 go 1.26.0
 

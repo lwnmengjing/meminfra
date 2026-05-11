@@ -1,6 +1,6 @@
 # MemInfra Progress Memory
 
-Last updated: 2026-05-08
+Last updated: 2026-05-09
 
 ## Project Memory
 
@@ -36,7 +36,7 @@ The active MVP is intentionally small:
 - No MCP adapter.
 - No discovery engine.
 - No reconciliation loop.
-- No incident workflow beyond the generic searchable memory document foundation.
+- Incident memory and relationship memory are implemented as first-class local memory surfaces, but there is no automated RCA workflow yet.
 
 ## Implemented So Far
 
@@ -61,14 +61,33 @@ Implemented behavior:
   - Preserves `first_seen`.
   - Updates `last_seen`.
   - Refreshes the resource search document.
+- `meminfra resource get/list`
+  - Reads resources by key or lists recent resources.
 - `meminfra observe add`
   - Records numeric observations for existing resources.
   - Creates searchable observation memory documents.
+- `meminfra observe get/list`
+  - Reads observations by ID or lists recent observations with optional resource/metric filters.
 - `meminfra event add`
   - Records events for existing resources.
   - Creates searchable event memory documents.
+- `meminfra event get/list`
+  - Reads events by ID or lists recent events with optional resource/type filters.
+- `meminfra incident add`
+  - Records operational incident experience.
+  - Creates searchable incident memory documents.
+- `meminfra incident get/list`
+  - Reads incidents by ID or lists recent incidents.
+- `meminfra relationship add`
+  - Records infrastructure relationships between two resources.
+  - Creates searchable relationship memory documents.
+- `meminfra relationship get/list`
+  - Reads relationships by ID or lists recent relationships with optional resource/type filters.
 - `meminfra search`
   - Queries SQLite FTS5 and returns matching memory documents.
+- All commands support `--output text|json`
+  - `text` remains the default for humans.
+  - `json` is intended for Codex/OpenCode/Claude Code and future MCP/HTTP adapters.
 
 ## Data Model
 
@@ -80,6 +99,10 @@ Current tables:
   - `resource_id`, `metric`, `value`, `unit`, `source`, `metadata_json`, `observed_at`
 - `events`
   - `resource_id`, `event_type`, `event_data_json`, `source`, `created_at`
+- `incidents`
+  - `title`, `symptoms`, `root_cause`, `solution`, `result`, `tags`, `source`, `metadata_json`, `created_at`, `updated_at`
+- `relationships`
+  - `src_resource_id`, `dst_resource_id`, `relation_type`, `source`, `metadata_json`, `created_at`, `updated_at`
 - `memory_documents`
   - `doc_type`, `ref_id`, `title`, `body`, `tags`, `created_at`, `updated_at`
 - `memory_fts`
@@ -161,6 +184,38 @@ Review fixes applied on 2026-05-08:
 - JSON text fields are strict: invalid `metadata_json` and `event_data_json` inputs are rejected before persistence.
 - Subcommand `-h` output is visible and exits successfully.
 
+Progress on 2026-05-09:
+
+- Added `--output json` support to `init`, `resource upsert`, `observe add`, `event add`, and `search`.
+- Added CLI tests that parse JSON output and verify unsupported output formats fail clearly.
+- Fixed JSON output DTOs so `metadata_json` and `event_data_json` are embedded JSON values, not double-encoded strings.
+- Fixed parent command help for `resource -h`, `observe -h`, and `event -h`.
+- Added a friendly `--value is required` error for `observe add` when no value is supplied.
+- Simplified FTS query builder signature after confirming it cannot currently fail.
+- Added first-class incident memory with `meminfra incident add`, an `incidents` table, FTS indexing, JSON output, and tests.
+- Added `get/list` commands and store methods for resources, observations, events, and incidents.
+- Direction calibration: current implementation is still aligned with the original MemInfra MVP, but CLI and store are becoming too large. Next code changes should move business behavior behind `internal/core` before adding more surfaces.
+- Review fix: list commands with a missing resource filter now return empty results instead of `resource not found`.
+- Review fix: invalid child command usage now mentions all available subcommands.
+- Review fix: `make test` and `make build` now pass Go subcommand arguments in the correct order.
+- Added `internal/core` as the application service layer. The CLI now depends on core instead of store directly.
+- Added first-class relationship memory with `meminfra relationship add/get/list`, a `relationships` table, FTS indexing, JSON output, and tests.
+- Split `cmd/meminfra` into focused command files by command family plus shared output/common helpers. CLI behavior is unchanged, but future command growth no longer has to pass through one large `main.go`.
+- Added `internal/index` for memory document projection and safe FTS query construction. Store now owns persistence while index owns searchable text shaping.
+- Added topology-style relationship query helpers with `QueryTopology` and `meminfra relationship topology`. Supports resource-centered one-hop traversal, `in`/`out`/`both` direction filtering, relationship type filtering, text output, and JSON output.
+- Added a minimal MCP stdio server at `cmd/meminfra-mcp` with `initialize`, `ping`, `tools/list`, and `tools/call`.
+- Added MCP tools: `search_memory`, `list_resources`, `get_resource`, `query_topology`, `list_observations`, `list_events`, and `list_incidents`.
+- Updated `make build` to produce both `bin/meminfra` and `bin/meminfra-mcp`.
+- Added `docs/mcp-contract.md` and README MCP setup notes.
+- Added one-click installation scripts: `script/install` for binaries/database plus optional agent setup, and `script/install-agent` for Claude Code, Codex, and OpenCode MCP configuration.
+- Added `docs/install.md` with human and LLM-agent installation flows modeled after agent-friendly open source projects.
+- Switched the public module/repository identity to `github.com/mss-boot-io/meminfra`.
+- Added GitHub Actions workflows for PR/main CI, tag release artifacts, CodeQL scanning, and Dependabot updates.
+- Added `docs/ci.md` with recommended `main` branch protection checks.
+- Review fix: agent installer no longer overwrites existing `.mcp.json` or `opencode.jsonc`; it prints merge snippets instead.
+- Review fix: Makefile now defaults to portable `go` and `gofmt` commands.
+- Review fix: search limits are capped consistently and SQLite foreign keys are enabled on open.
+
 Smoke database path used:
 
 ```zsh
@@ -174,7 +229,7 @@ Smoke database path used:
 - Raw SQL is used for FTS5 virtual table creation and search.
 - JSON payload fields are stored as `text` columns for now.
 - No `gorm.io/datatypes` dependency is used in the current implementation.
-- The MVP stores resource, observation, and event content into generic `memory_documents` so future incident memory and MCP retrieval can build on the same search surface.
+- The MVP stores resource, observation, event, incident, and relationship content into generic `memory_documents` so future MCP retrieval can build on the same search surface.
 
 ## Current Git State
 
@@ -193,10 +248,9 @@ make test
 
 Next implementation slice:
 
-- Add CLI JSON output mode for agent-friendly consumption.
-- Add incident memory as a first-class command and table.
-- Add list/get commands for resources, observations, and events.
-- Add a small query API layer inside `internal/core` before introducing HTTP or MCP.
+- Add MCP write tools only after the read/query contract has been exercised by an agent.
+- Consider separating validation/defaulting from `internal/store` into `internal/core` as the next cleanup step.
+- Before first public release, finalize the GitHub repository URL in installation docs and add release artifacts/checksums.
 
 Future larger slices:
 

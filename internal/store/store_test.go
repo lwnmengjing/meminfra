@@ -26,6 +26,18 @@ func newTestStore(t *testing.T) *Store {
 	return store
 }
 
+func TestOpenEnablesSQLiteForeignKeys(t *testing.T) {
+	store := newTestStore(t)
+
+	var enabled int
+	if err := store.db.Raw("PRAGMA foreign_keys").Scan(&enabled).Error; err != nil {
+		t.Fatalf("read foreign_keys pragma: %v", err)
+	}
+	if enabled != 1 {
+		t.Fatalf("foreign_keys pragma = %d, want 1", enabled)
+	}
+}
+
 func TestUpsertResourcePreservesFirstSeen(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)
@@ -63,6 +75,27 @@ func TestUpsertResourcePreservesFirstSeen(t *testing.T) {
 	}
 	if second.IPv4 != "192.0.2.10" {
 		t.Fatalf("ipv4 not updated: %q", second.IPv4)
+	}
+}
+
+func TestNormalizeSearchLimit(t *testing.T) {
+	tests := []struct {
+		name  string
+		limit int
+		want  int
+	}{
+		{name: "default", limit: 0, want: 10},
+		{name: "negative", limit: -1, want: 10},
+		{name: "keeps positive", limit: 25, want: 25},
+		{name: "caps large", limit: 10000, want: 500},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeSearchLimit(tt.limit); got != tt.want {
+				t.Fatalf("normalizeSearchLimit(%d) = %d, want %d", tt.limit, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -151,6 +184,303 @@ func TestAddEventStoresEventAndSearchDocument(t *testing.T) {
 	}
 }
 
+func TestAddIncidentStoresIncidentAndSearchDocument(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	incident, err := store.AddIncident(ctx, IncidentInput{
+		Title:        "Frankfurt RTT spike",
+		Symptoms:     "RTT increased from 30ms to 180ms",
+		RootCause:    "OVH upstream congestion",
+		Solution:     "Shift traffic to London",
+		Result:       "Latency recovered",
+		Tags:         "frankfurt rtt ovh",
+		MetadataJSON: `{"region":"fra"}`,
+	})
+	if err != nil {
+		t.Fatalf("add incident: %v", err)
+	}
+	if incident.Title != "Frankfurt RTT spike" || incident.MetadataJSON != `{"region":"fra"}` {
+		t.Fatalf("unexpected incident: %#v", incident)
+	}
+
+	results, err := store.Search(ctx, "OVH congestion", 10)
+	if err != nil {
+		t.Fatalf("search incident: %v", err)
+	}
+	if len(results) != 1 || results[0].DocType != "incident" {
+		t.Fatalf("unexpected search results: %#v", results)
+	}
+}
+
+func TestAddRelationshipStoresRelationshipAndSearchDocument(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	if _, err := store.UpsertResource(ctx, ResourceInput{
+		ResourceKey: "node/frankfurt-01",
+		Kind:        "server",
+		Hostname:    "frankfurt-01",
+	}); err != nil {
+		t.Fatalf("src resource: %v", err)
+	}
+	if _, err := store.UpsertResource(ctx, ResourceInput{
+		ResourceKey: "node/london-01",
+		Kind:        "server",
+		Hostname:    "london-01",
+	}); err != nil {
+		t.Fatalf("dst resource: %v", err)
+	}
+
+	relationship, err := store.AddRelationship(ctx, RelationshipInput{
+		SrcResourceKey: "node/frankfurt-01",
+		DstResourceKey: "node/london-01",
+		RelationType:   "wg_tunnel",
+		MetadataJSON:   `{"interface":"wg0"}`,
+	})
+	if err != nil {
+		t.Fatalf("add relationship: %v", err)
+	}
+	if relationship.RelationType != "wg_tunnel" || relationship.MetadataJSON != `{"interface":"wg0"}` {
+		t.Fatalf("unexpected relationship: %#v", relationship)
+	}
+
+	results, err := store.Search(ctx, "frankfurt wg_tunnel london", 10)
+	if err != nil {
+		t.Fatalf("search relationship: %v", err)
+	}
+	if len(results) != 1 || results[0].DocType != "relationship" {
+		t.Fatalf("unexpected search results: %#v", results)
+	}
+}
+
+func TestQueryTopologyReturnsDirectedEdges(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	for _, key := range []string{"node/frankfurt-01", "node/london-01", "node/paris-01"} {
+		if _, err := store.UpsertResource(ctx, ResourceInput{
+			ResourceKey: key,
+			Kind:        "server",
+			Hostname:    strings.TrimPrefix(key, "node/"),
+		}); err != nil {
+			t.Fatalf("resource %s: %v", key, err)
+		}
+	}
+	if _, err := store.AddRelationship(ctx, RelationshipInput{
+		SrcResourceKey: "node/frankfurt-01",
+		DstResourceKey: "node/london-01",
+		RelationType:   "wg_tunnel",
+	}); err != nil {
+		t.Fatalf("outgoing relationship: %v", err)
+	}
+	if _, err := store.AddRelationship(ctx, RelationshipInput{
+		SrcResourceKey: "node/paris-01",
+		DstResourceKey: "node/frankfurt-01",
+		RelationType:   "service_dependency",
+	}); err != nil {
+		t.Fatalf("incoming relationship: %v", err)
+	}
+
+	outgoing, err := store.QueryTopology(ctx, TopologyQueryOptions{
+		ResourceKey: "node/frankfurt-01",
+		Direction:   "out",
+	})
+	if err != nil {
+		t.Fatalf("query outgoing topology: %v", err)
+	}
+	if len(outgoing) != 1 || outgoing[0].SrcResource.ResourceKey != "node/frankfurt-01" || outgoing[0].DstResource.ResourceKey != "node/london-01" {
+		t.Fatalf("unexpected outgoing edges: %#v", outgoing)
+	}
+
+	incoming, err := store.QueryTopology(ctx, TopologyQueryOptions{
+		ResourceKey: "node/frankfurt-01",
+		Direction:   "in",
+	})
+	if err != nil {
+		t.Fatalf("query incoming topology: %v", err)
+	}
+	if len(incoming) != 1 || incoming[0].SrcResource.ResourceKey != "node/paris-01" || incoming[0].DstResource.ResourceKey != "node/frankfurt-01" {
+		t.Fatalf("unexpected incoming edges: %#v", incoming)
+	}
+
+	wgOnly, err := store.QueryTopology(ctx, TopologyQueryOptions{
+		ResourceKey:  "node/frankfurt-01",
+		RelationType: "wg_tunnel",
+		Direction:    "both",
+	})
+	if err != nil {
+		t.Fatalf("query filtered topology: %v", err)
+	}
+	if len(wgOnly) != 1 || wgOnly[0].Relationship.RelationType != "wg_tunnel" {
+		t.Fatalf("unexpected filtered edges: %#v", wgOnly)
+	}
+}
+
+func TestGetAndListMethods(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	resource, err := store.UpsertResource(ctx, ResourceInput{
+		ResourceKey: "node/frankfurt-01",
+		Kind:        "server",
+		Hostname:    "frankfurt-01",
+	})
+	if err != nil {
+		t.Fatalf("resource: %v", err)
+	}
+	resources, err := store.ListResources(ctx, ListOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("list resources: %v", err)
+	}
+	if len(resources) != 1 || resources[0].ID != resource.ID {
+		t.Fatalf("unexpected resources: %#v", resources)
+	}
+
+	observation, err := store.AddObservation(ctx, ObservationInput{
+		ResourceKey: "node/frankfurt-01",
+		Metric:      "rtt_ms",
+		Value:       82,
+	})
+	if err != nil {
+		t.Fatalf("observation: %v", err)
+	}
+	gotObservation, err := store.ObservationByID(ctx, observation.ID)
+	if err != nil {
+		t.Fatalf("get observation: %v", err)
+	}
+	if gotObservation.ID != observation.ID {
+		t.Fatalf("unexpected observation: %#v", gotObservation)
+	}
+	observations, err := store.ListObservations(ctx, ObservationListOptions{
+		ResourceKey: "node/frankfurt-01",
+		Metric:      "rtt_ms",
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("list observations: %v", err)
+	}
+	if len(observations) != 1 || observations[0].ID != observation.ID {
+		t.Fatalf("unexpected observations: %#v", observations)
+	}
+
+	event, err := store.AddEvent(ctx, EventInput{
+		ResourceKey: "node/frankfurt-01",
+		EventType:   "rtt_spike",
+	})
+	if err != nil {
+		t.Fatalf("event: %v", err)
+	}
+	gotEvent, err := store.EventByID(ctx, event.ID)
+	if err != nil {
+		t.Fatalf("get event: %v", err)
+	}
+	if gotEvent.ID != event.ID {
+		t.Fatalf("unexpected event: %#v", gotEvent)
+	}
+	events, err := store.ListEvents(ctx, EventListOptions{
+		ResourceKey: "node/frankfurt-01",
+		EventType:   "rtt_spike",
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	if len(events) != 1 || events[0].ID != event.ID {
+		t.Fatalf("unexpected events: %#v", events)
+	}
+
+	incident, err := store.AddIncident(ctx, IncidentInput{Title: "Frankfurt RTT spike"})
+	if err != nil {
+		t.Fatalf("incident: %v", err)
+	}
+	gotIncident, err := store.IncidentByID(ctx, incident.ID)
+	if err != nil {
+		t.Fatalf("get incident: %v", err)
+	}
+	if gotIncident.ID != incident.ID {
+		t.Fatalf("unexpected incident: %#v", gotIncident)
+	}
+	incidents, err := store.ListIncidents(ctx, IncidentListOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("list incidents: %v", err)
+	}
+	if len(incidents) != 1 || incidents[0].ID != incident.ID {
+		t.Fatalf("unexpected incidents: %#v", incidents)
+	}
+
+	if _, err := store.UpsertResource(ctx, ResourceInput{
+		ResourceKey: "node/london-01",
+		Kind:        "server",
+	}); err != nil {
+		t.Fatalf("second resource: %v", err)
+	}
+	relationship, err := store.AddRelationship(ctx, RelationshipInput{
+		SrcResourceKey: "node/frankfurt-01",
+		DstResourceKey: "node/london-01",
+		RelationType:   "service_dependency",
+	})
+	if err != nil {
+		t.Fatalf("relationship: %v", err)
+	}
+	gotRelationship, err := store.RelationshipByID(ctx, relationship.ID)
+	if err != nil {
+		t.Fatalf("get relationship: %v", err)
+	}
+	if gotRelationship.ID != relationship.ID {
+		t.Fatalf("unexpected relationship: %#v", gotRelationship)
+	}
+	relationships, err := store.ListRelationships(ctx, RelationshipListOptions{
+		ResourceKey:  "node/frankfurt-01",
+		RelationType: "service_dependency",
+		Limit:        10,
+	})
+	if err != nil {
+		t.Fatalf("list relationships: %v", err)
+	}
+	if len(relationships) != 1 || relationships[0].ID != relationship.ID {
+		t.Fatalf("unexpected relationships: %#v", relationships)
+	}
+}
+
+func TestListWithMissingResourceFilterReturnsEmpty(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	observations, err := store.ListObservations(ctx, ObservationListOptions{
+		ResourceKey: "node/missing",
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("list observations with missing resource: %v", err)
+	}
+	if len(observations) != 0 {
+		t.Fatalf("expected empty observations, got %#v", observations)
+	}
+
+	events, err := store.ListEvents(ctx, EventListOptions{
+		ResourceKey: "node/missing",
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("list events with missing resource: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("expected empty events, got %#v", events)
+	}
+
+	relationships, err := store.ListRelationships(ctx, RelationshipListOptions{
+		ResourceKey: "node/missing",
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("list relationships with missing resource: %v", err)
+	}
+	if len(relationships) != 0 {
+		t.Fatalf("expected empty relationships, got %#v", relationships)
+	}
+}
+
 func TestSearchEscapesFTSSpecialCharacters(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)
@@ -218,6 +548,22 @@ func TestRejectsInvalidJSONFields(t *testing.T) {
 		EventDataJSON: "{bad-json}",
 	}); err == nil || !strings.Contains(err.Error(), "event_data_json must be valid JSON") {
 		t.Fatalf("expected invalid event data error, got %v", err)
+	}
+
+	if _, err := store.AddIncident(ctx, IncidentInput{
+		Title:        "Bad incident",
+		MetadataJSON: "{bad-json}",
+	}); err == nil || !strings.Contains(err.Error(), "metadata_json must be valid JSON") {
+		t.Fatalf("expected invalid incident metadata error, got %v", err)
+	}
+
+	if _, err := store.AddRelationship(ctx, RelationshipInput{
+		SrcResourceKey: "node/frankfurt-01",
+		DstResourceKey: "node/frankfurt-01",
+		RelationType:   "bad_json",
+		MetadataJSON:   "{bad-json}",
+	}); err == nil || !strings.Contains(err.Error(), "metadata_json must be valid JSON") {
+		t.Fatalf("expected invalid relationship metadata error, got %v", err)
 	}
 }
 

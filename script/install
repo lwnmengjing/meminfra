@@ -1,0 +1,158 @@
+#!/usr/bin/env sh
+set -eu
+
+repo_url="${MEMINFRA_REPO:-https://github.com/mss-boot-io/meminfra.git}"
+ref="${MEMINFRA_REF:-main}"
+prefix="${MEMINFRA_PREFIX:-$HOME/.local}"
+db_path="${MEMINFRA_DB:-$HOME/.local/share/meminfra/meminfra.db}"
+agents="${MEMINFRA_AGENTS:-all}"
+scope="${MEMINFRA_AGENT_SCOPE:-user}"
+source_dir="${MEMINFRA_SOURCE_DIR:-}"
+keep_source="${MEMINFRA_KEEP_SOURCE:-0}"
+go_cmd="${GO:-go}"
+
+usage() {
+  cat <<'USAGE'
+Usage: script/install [options]
+
+Options:
+  --prefix PATH         Install prefix. Default: ~/.local
+  --db PATH             SQLite database path. Default: ~/.local/share/meminfra/meminfra.db
+  --agents LIST         Comma-separated agents: all,none,claude,codex,opencode. Default: all
+  --scope SCOPE         Agent config scope: user or project. Default: user
+  --repo URL            Git repository URL. Default: MEMINFRA_REPO or upstream repo
+  --ref REF             Git ref to checkout when cloning. Default: main
+  --source-dir PATH     Use an existing source checkout instead of cloning
+  --keep-source         Keep temporary cloned source directory
+  -h, --help            Show help
+
+Environment variables mirror the long options:
+  MEMINFRA_PREFIX, MEMINFRA_DB, MEMINFRA_AGENTS, MEMINFRA_AGENT_SCOPE,
+  MEMINFRA_REPO, MEMINFRA_REF, MEMINFRA_SOURCE_DIR, MEMINFRA_KEEP_SOURCE.
+USAGE
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --prefix)
+      prefix="$2"
+      shift 2
+      ;;
+    --db)
+      db_path="$2"
+      shift 2
+      ;;
+    --agents)
+      agents="$2"
+      shift 2
+      ;;
+    --scope)
+      scope="$2"
+      shift 2
+      ;;
+    --repo)
+      repo_url="$2"
+      shift 2
+      ;;
+    --ref)
+      ref="$2"
+      shift 2
+      ;;
+    --source-dir)
+      source_dir="$2"
+      shift 2
+      ;;
+    --keep-source)
+      keep_source=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+case "$scope" in
+  user|project) ;;
+  *)
+    echo "--scope must be user or project" >&2
+    exit 2
+    ;;
+esac
+
+need() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "missing required command: $1" >&2
+    exit 1
+  fi
+}
+
+need_go() {
+  case "$go_cmd" in
+    */*)
+      if [ ! -x "$go_cmd" ]; then
+        echo "missing required Go executable: $go_cmd" >&2
+        exit 1
+      fi
+      ;;
+    *)
+      need "$go_cmd"
+      ;;
+  esac
+}
+
+need_go
+
+cleanup_dir=""
+if [ -n "$source_dir" ]; then
+  src="$source_dir"
+elif [ -f "./go.mod" ] && [ -d "./cmd/meminfra" ] && [ -d "./cmd/meminfra-mcp" ]; then
+  src="$(pwd)"
+else
+  need git
+  cleanup_dir="$(mktemp -d)"
+  src="$cleanup_dir/meminfra"
+  git clone --depth 1 --branch "$ref" "$repo_url" "$src"
+fi
+
+if [ -n "$cleanup_dir" ] && [ "$keep_source" != "1" ]; then
+  trap 'rm -rf "$cleanup_dir"' EXIT INT TERM
+fi
+
+bin_dir="$prefix/bin"
+mkdir -p "$bin_dir" "$(dirname "$db_path")"
+
+echo "Building MemInfra from $src"
+(
+  cd "$src"
+  "$go_cmd" build -tags sqlite_fts5 -o "$bin_dir/meminfra" ./cmd/meminfra
+  "$go_cmd" build -tags sqlite_fts5 -o "$bin_dir/meminfra-mcp" ./cmd/meminfra-mcp
+)
+
+"$bin_dir/meminfra" init --db "$db_path" >/dev/null
+
+echo "Installed:"
+echo "  $bin_dir/meminfra"
+echo "  $bin_dir/meminfra-mcp"
+echo "Database:"
+echo "  $db_path"
+
+install_agent_script="$src/script/install-agent"
+if [ -x "$install_agent_script" ] && [ "$agents" != "none" ]; then
+  "$install_agent_script" --agents "$agents" --scope "$scope" --bin "$bin_dir/meminfra-mcp" --db "$db_path"
+fi
+
+case ":$PATH:" in
+  *":$bin_dir:"*) ;;
+  *)
+    echo
+    echo "Add this to your shell profile if needed:"
+    echo "  export PATH=\"$bin_dir:\$PATH\""
+    ;;
+esac

@@ -8,13 +8,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lwnmengjing/ai-infra-operator/internal/model"
+	"github.com/mss-boot-io/meminfra/internal/index"
+	"github.com/mss-boot-io/meminfra/internal/model"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/gorm/logger"
 )
 
-var ErrResourceNotFound = errors.New("resource not found")
+var (
+	ErrResourceNotFound     = errors.New("resource not found")
+	ErrObservationNotFound  = errors.New("observation not found")
+	ErrEventNotFound        = errors.New("event not found")
+	ErrIncidentNotFound     = errors.New("incident not found")
+	ErrRelationshipNotFound = errors.New("relationship not found")
+)
 
 type Store struct {
 	db *gorm.DB
@@ -50,12 +58,68 @@ type EventInput struct {
 	CreatedAt     time.Time
 }
 
+type IncidentInput struct {
+	Title        string
+	Symptoms     string
+	RootCause    string
+	Solution     string
+	Result       string
+	Tags         string
+	Source       string
+	MetadataJSON string
+	CreatedAt    time.Time
+}
+
+type RelationshipInput struct {
+	SrcResourceKey string
+	DstResourceKey string
+	RelationType   string
+	Source         string
+	MetadataJSON   string
+	CreatedAt      time.Time
+}
+
+type ListOptions struct {
+	Limit int
+}
+
+type ObservationListOptions struct {
+	ResourceKey string
+	Metric      string
+	Limit       int
+}
+
+type EventListOptions struct {
+	ResourceKey string
+	EventType   string
+	Limit       int
+}
+
+type IncidentListOptions struct {
+	Limit int
+}
+
+type RelationshipListOptions struct {
+	ResourceKey  string
+	RelationType string
+	Limit        int
+}
+
+type TopologyQueryOptions struct {
+	ResourceKey  string
+	RelationType string
+	Direction    string
+	Limit        int
+}
+
 func Open(path string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, fmt.Errorf("db path is required")
 	}
 
-	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -65,6 +129,10 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	sqlDB.SetMaxOpenConns(1)
+
+	if err := db.Exec("PRAGMA foreign_keys = ON").Error; err != nil {
+		return nil, err
+	}
 
 	return &Store{db: db}, nil
 }
@@ -82,6 +150,8 @@ func (s *Store) Migrate(ctx context.Context) error {
 		&model.Resource{},
 		&model.Observation{},
 		&model.Event{},
+		&model.Incident{},
+		&model.Relationship{},
 		&model.MemoryDocument{},
 	); err != nil {
 		return err
@@ -143,7 +213,7 @@ func (s *Store) UpsertResource(ctx context.Context, input ResourceInput) (*model
 		if err := tx.Where("resource_key = ?", input.ResourceKey).First(&resource).Error; err != nil {
 			return err
 		}
-		return upsertMemoryDocument(tx, resourceDocument(resource))
+		return upsertMemoryDocument(tx, index.ResourceDocument(resource))
 	})
 	if err != nil {
 		return nil, err
@@ -188,7 +258,7 @@ func (s *Store) AddObservation(ctx context.Context, input ObservationInput) (*mo
 			return err
 		}
 
-		return upsertMemoryDocument(tx, observationDocument(observation, *resource))
+		return upsertMemoryDocument(tx, index.ObservationDocument(observation, *resource))
 	})
 	if err != nil {
 		return nil, err
@@ -231,7 +301,7 @@ func (s *Store) AddEvent(ctx context.Context, input EventInput) (*model.Event, e
 			return err
 		}
 
-		return upsertMemoryDocument(tx, eventDocument(event, *resource))
+		return upsertMemoryDocument(tx, index.EventDocument(event, *resource))
 	})
 	if err != nil {
 		return nil, err
@@ -239,20 +309,107 @@ func (s *Store) AddEvent(ctx context.Context, input EventInput) (*model.Event, e
 	return &event, nil
 }
 
-func (s *Store) Search(ctx context.Context, query string, limit int) ([]model.SearchResult, error) {
-	matchQuery, err := safeFTSQuery(query)
+func (s *Store) AddIncident(ctx context.Context, input IncidentInput) (*model.Incident, error) {
+	if strings.TrimSpace(input.Title) == "" {
+		return nil, fmt.Errorf("incident title is required")
+	}
+	metadata, err := normalizeJSON(input.MetadataJSON, "metadata_json")
 	if err != nil {
 		return nil, err
 	}
+
+	now := time.Now().UTC()
+	createdAt := input.CreatedAt.UTC()
+	if createdAt.IsZero() {
+		createdAt = now
+	}
+
+	incident := model.Incident{
+		Title:        input.Title,
+		Symptoms:     input.Symptoms,
+		RootCause:    input.RootCause,
+		Solution:     input.Solution,
+		Result:       input.Result,
+		Tags:         input.Tags,
+		Source:       defaultSource(input.Source),
+		MetadataJSON: metadata,
+		CreatedAt:    createdAt,
+		UpdatedAt:    now,
+	}
+
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&incident).Error; err != nil {
+			return err
+		}
+		return upsertMemoryDocument(tx, index.IncidentDocument(incident))
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &incident, nil
+}
+
+func (s *Store) AddRelationship(ctx context.Context, input RelationshipInput) (*model.Relationship, error) {
+	if strings.TrimSpace(input.SrcResourceKey) == "" {
+		return nil, fmt.Errorf("src resource key is required")
+	}
+	if strings.TrimSpace(input.DstResourceKey) == "" {
+		return nil, fmt.Errorf("dst resource key is required")
+	}
+	if strings.TrimSpace(input.RelationType) == "" {
+		return nil, fmt.Errorf("relation type is required")
+	}
+	metadata, err := normalizeJSON(input.MetadataJSON, "metadata_json")
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	createdAt := input.CreatedAt.UTC()
+	if createdAt.IsZero() {
+		createdAt = now
+	}
+
+	var relationship model.Relationship
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		src, err := findResource(tx, input.SrcResourceKey)
+		if err != nil {
+			return err
+		}
+		dst, err := findResource(tx, input.DstResourceKey)
+		if err != nil {
+			return err
+		}
+
+		relationship = model.Relationship{
+			SrcResourceID: src.ID,
+			DstResourceID: dst.ID,
+			RelationType:  input.RelationType,
+			Source:        defaultSource(input.Source),
+			MetadataJSON:  metadata,
+			CreatedAt:     createdAt,
+			UpdatedAt:     now,
+		}
+		if err := tx.Create(&relationship).Error; err != nil {
+			return err
+		}
+		return upsertMemoryDocument(tx, index.RelationshipDocument(relationship, *src, *dst))
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &relationship, nil
+}
+
+func (s *Store) Search(ctx context.Context, query string, limit int) ([]model.SearchResult, error) {
+	matchQuery := index.SafeFTSQuery(query)
 	if matchQuery == "" {
 		return nil, fmt.Errorf("query is required")
 	}
-	if limit <= 0 {
-		limit = 10
-	}
+	limit = normalizeSearchLimit(limit)
 
 	var results []model.SearchResult
-	err = s.db.WithContext(ctx).Raw(`
+	err := s.db.WithContext(ctx).Raw(`
 SELECT
 	memory_documents.id,
 	memory_documents.doc_type,
@@ -276,6 +433,193 @@ func (s *Store) ResourceByKey(ctx context.Context, key string) (*model.Resource,
 	return findResource(s.db.WithContext(ctx), key)
 }
 
+func (s *Store) ListResources(ctx context.Context, options ListOptions) ([]model.Resource, error) {
+	var resources []model.Resource
+	err := s.db.WithContext(ctx).
+		Order("last_seen DESC").
+		Limit(normalizeLimit(options.Limit)).
+		Find(&resources).Error
+	return resources, err
+}
+
+func (s *Store) ObservationByID(ctx context.Context, id uint) (*model.Observation, error) {
+	var observation model.Observation
+	err := s.db.WithContext(ctx).First(&observation, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrObservationNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &observation, nil
+}
+
+func (s *Store) ListObservations(ctx context.Context, options ObservationListOptions) ([]model.Observation, error) {
+	query := s.db.WithContext(ctx).Model(&model.Observation{})
+	if strings.TrimSpace(options.ResourceKey) != "" {
+		resource, err := findResource(s.db.WithContext(ctx), options.ResourceKey)
+		if errors.Is(err, ErrResourceNotFound) {
+			return []model.Observation{}, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		query = query.Where("resource_id = ?", resource.ID)
+	}
+	if strings.TrimSpace(options.Metric) != "" {
+		query = query.Where("metric = ?", options.Metric)
+	}
+
+	var observations []model.Observation
+	err := query.
+		Order("observed_at DESC").
+		Limit(normalizeLimit(options.Limit)).
+		Find(&observations).Error
+	return observations, err
+}
+
+func (s *Store) EventByID(ctx context.Context, id uint) (*model.Event, error) {
+	var event model.Event
+	err := s.db.WithContext(ctx).First(&event, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrEventNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
+func (s *Store) ListEvents(ctx context.Context, options EventListOptions) ([]model.Event, error) {
+	query := s.db.WithContext(ctx).Model(&model.Event{})
+	if strings.TrimSpace(options.ResourceKey) != "" {
+		resource, err := findResource(s.db.WithContext(ctx), options.ResourceKey)
+		if errors.Is(err, ErrResourceNotFound) {
+			return []model.Event{}, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		query = query.Where("resource_id = ?", resource.ID)
+	}
+	if strings.TrimSpace(options.EventType) != "" {
+		query = query.Where("event_type = ?", options.EventType)
+	}
+
+	var events []model.Event
+	err := query.
+		Order("created_at DESC").
+		Limit(normalizeLimit(options.Limit)).
+		Find(&events).Error
+	return events, err
+}
+
+func (s *Store) IncidentByID(ctx context.Context, id uint) (*model.Incident, error) {
+	var incident model.Incident
+	err := s.db.WithContext(ctx).First(&incident, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrIncidentNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &incident, nil
+}
+
+func (s *Store) ListIncidents(ctx context.Context, options IncidentListOptions) ([]model.Incident, error) {
+	var incidents []model.Incident
+	err := s.db.WithContext(ctx).
+		Order("created_at DESC").
+		Limit(normalizeLimit(options.Limit)).
+		Find(&incidents).Error
+	return incidents, err
+}
+
+func (s *Store) RelationshipByID(ctx context.Context, id uint) (*model.Relationship, error) {
+	var relationship model.Relationship
+	err := s.db.WithContext(ctx).First(&relationship, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrRelationshipNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &relationship, nil
+}
+
+func (s *Store) ListRelationships(ctx context.Context, options RelationshipListOptions) ([]model.Relationship, error) {
+	query := s.db.WithContext(ctx).Model(&model.Relationship{})
+	if strings.TrimSpace(options.ResourceKey) != "" {
+		resource, err := findResource(s.db.WithContext(ctx), options.ResourceKey)
+		if errors.Is(err, ErrResourceNotFound) {
+			return []model.Relationship{}, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		query = query.Where("src_resource_id = ? OR dst_resource_id = ?", resource.ID, resource.ID)
+	}
+	if strings.TrimSpace(options.RelationType) != "" {
+		query = query.Where("relation_type = ?", options.RelationType)
+	}
+
+	var relationships []model.Relationship
+	err := query.
+		Order("created_at DESC").
+		Limit(normalizeLimit(options.Limit)).
+		Find(&relationships).Error
+	return relationships, err
+}
+
+func (s *Store) QueryTopology(ctx context.Context, options TopologyQueryOptions) ([]model.TopologyEdge, error) {
+	if strings.TrimSpace(options.ResourceKey) == "" {
+		return nil, fmt.Errorf("resource key is required")
+	}
+
+	resource, err := findResource(s.db.WithContext(ctx), options.ResourceKey)
+	if errors.Is(err, ErrResourceNotFound) {
+		return []model.TopologyEdge{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	query := s.db.WithContext(ctx).
+		Model(&model.Relationship{}).
+		Preload("SrcResource").
+		Preload("DstResource")
+
+	switch normalizeTopologyDirection(options.Direction) {
+	case "out":
+		query = query.Where("src_resource_id = ?", resource.ID)
+	case "in":
+		query = query.Where("dst_resource_id = ?", resource.ID)
+	default:
+		query = query.Where("src_resource_id = ? OR dst_resource_id = ?", resource.ID, resource.ID)
+	}
+	if strings.TrimSpace(options.RelationType) != "" {
+		query = query.Where("relation_type = ?", options.RelationType)
+	}
+
+	var relationships []model.Relationship
+	if err := query.
+		Order("created_at DESC").
+		Limit(normalizeLimit(options.Limit)).
+		Find(&relationships).Error; err != nil {
+		return nil, err
+	}
+
+	edges := make([]model.TopologyEdge, 0, len(relationships))
+	for _, relationship := range relationships {
+		edges = append(edges, model.TopologyEdge{
+			Relationship: relationship,
+			SrcResource:  relationship.SrcResource,
+			DstResource:  relationship.DstResource,
+		})
+	}
+	return edges, nil
+}
+
 func findResource(db *gorm.DB, key string) (*model.Resource, error) {
 	var resource model.Resource
 	err := db.Where("resource_key = ?", key).First(&resource).Error
@@ -286,6 +630,37 @@ func findResource(db *gorm.DB, key string) (*model.Resource, error) {
 		return nil, err
 	}
 	return &resource, nil
+}
+
+func normalizeLimit(limit int) int {
+	if limit <= 0 {
+		return 50
+	}
+	if limit > 500 {
+		return 500
+	}
+	return limit
+}
+
+func normalizeSearchLimit(limit int) int {
+	if limit <= 0 {
+		return 10
+	}
+	if limit > 500 {
+		return 500
+	}
+	return limit
+}
+
+func normalizeTopologyDirection(direction string) string {
+	switch strings.ToLower(strings.TrimSpace(direction)) {
+	case "in", "incoming":
+		return "in"
+	case "out", "outgoing":
+		return "out"
+	default:
+		return "both"
+	}
 }
 
 func upsertMemoryDocument(tx *gorm.DB, doc model.MemoryDocument) error {
@@ -316,65 +691,6 @@ func upsertMemoryDocument(tx *gorm.DB, doc model.MemoryDocument) error {
 	return tx.Exec("INSERT INTO memory_fts(rowid, title, body, tags) VALUES (?, ?, ?, ?)", doc.ID, doc.Title, doc.Body, doc.Tags).Error
 }
 
-func resourceDocument(resource model.Resource) model.MemoryDocument {
-	return model.MemoryDocument{
-		DocType: "resource",
-		RefID:   resource.ID,
-		Title:   strings.TrimSpace(strings.Join([]string{resource.Kind, resource.ResourceKey, resource.Hostname}, " ")),
-		Body: strings.TrimSpace(strings.Join([]string{
-			resource.ResourceKey,
-			resource.Kind,
-			resource.Hostname,
-			resource.IPv4,
-			resource.IPv6,
-			resource.Provider,
-			resource.Region,
-			resource.Source,
-			string(resource.MetadataJSON),
-		}, " ")),
-		Tags: strings.TrimSpace(strings.Join([]string{resource.Kind, resource.Provider, resource.Region, resource.Source}, " ")),
-	}
-}
-
-func observationDocument(observation model.Observation, resource model.Resource) model.MemoryDocument {
-	value := fmt.Sprintf("%g", observation.Value)
-	return model.MemoryDocument{
-		DocType: "observation",
-		RefID:   observation.ID,
-		Title:   strings.TrimSpace(strings.Join([]string{resource.ResourceKey, observation.Metric, value, observation.Unit}, " ")),
-		Body: strings.TrimSpace(strings.Join([]string{
-			resource.ResourceKey,
-			resource.Hostname,
-			resource.Provider,
-			resource.Region,
-			observation.Metric,
-			value,
-			observation.Unit,
-			observation.Source,
-			string(observation.MetadataJSON),
-		}, " ")),
-		Tags: strings.TrimSpace(strings.Join([]string{"observation", observation.Metric, observation.Unit, observation.Source}, " ")),
-	}
-}
-
-func eventDocument(event model.Event, resource model.Resource) model.MemoryDocument {
-	return model.MemoryDocument{
-		DocType: "event",
-		RefID:   event.ID,
-		Title:   strings.TrimSpace(strings.Join([]string{resource.ResourceKey, event.EventType}, " ")),
-		Body: strings.TrimSpace(strings.Join([]string{
-			resource.ResourceKey,
-			resource.Hostname,
-			resource.Provider,
-			resource.Region,
-			event.EventType,
-			event.Source,
-			string(event.EventDataJSON),
-		}, " ")),
-		Tags: strings.TrimSpace(strings.Join([]string{"event", event.EventType, event.Source}, " ")),
-	}
-}
-
 func defaultSource(source string) string {
 	if strings.TrimSpace(source) == "" {
 		return "manual"
@@ -390,24 +706,4 @@ func normalizeJSON(value string, field string) (string, error) {
 		return "", fmt.Errorf("%s must be valid JSON", field)
 	}
 	return value, nil
-}
-
-func safeFTSQuery(query string) (string, error) {
-	tokens := strings.Fields(query)
-	if len(tokens) == 0 {
-		return "", nil
-	}
-
-	phrases := make([]string, 0, len(tokens))
-	for _, token := range tokens {
-		token = strings.TrimSpace(token)
-		if token == "" {
-			continue
-		}
-		phrases = append(phrases, `"`+strings.ReplaceAll(token, `"`, `""`)+`"`)
-	}
-	if len(phrases) == 0 {
-		return "", nil
-	}
-	return strings.Join(phrases, " AND "), nil
 }

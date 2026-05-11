@@ -41,6 +41,33 @@ type Event struct {
 	CreatedAt     time.Time `gorm:"not null;index"`
 }
 
+type Incident struct {
+	ID           uint      `gorm:"primaryKey"`
+	Title        string    `gorm:"not null;index"`
+	Symptoms     string    `gorm:"type:text"`
+	RootCause    string    `gorm:"column:root_cause;type:text"`
+	Solution     string    `gorm:"type:text"`
+	Result       string    `gorm:"type:text"`
+	Tags         string    `gorm:"index"`
+	Source       string    `gorm:"index"`
+	MetadataJSON string    `gorm:"column:metadata_json;type:text"`
+	CreatedAt    time.Time `gorm:"not null;index"`
+	UpdatedAt    time.Time `gorm:"not null;index"`
+}
+
+type Relationship struct {
+	ID            uint      `gorm:"primaryKey"`
+	SrcResourceID uint      `gorm:"not null;index"`
+	SrcResource   Resource  `gorm:"foreignKey:SrcResourceID;constraint:OnDelete:CASCADE"`
+	DstResourceID uint      `gorm:"not null;index"`
+	DstResource   Resource  `gorm:"foreignKey:DstResourceID;constraint:OnDelete:CASCADE"`
+	RelationType  string    `gorm:"not null;index"`
+	Source        string    `gorm:"index"`
+	MetadataJSON  string    `gorm:"column:metadata_json;type:text"`
+	CreatedAt     time.Time `gorm:"not null;index"`
+	UpdatedAt     time.Time `gorm:"not null;index"`
+}
+
 type MemoryDocument struct {
 	ID        uint      `gorm:"primaryKey"`
 	DocType   string    `gorm:"not null;index:idx_memory_ref,unique"`
@@ -60,4 +87,10 @@ type SearchResult struct {
 	Body    string
 	Tags    string
 	Rank    float64
+}
+
+type TopologyEdge struct {
+	Relationship Relationship
+	SrcResource  Resource
+	DstResource  Resource
 }
