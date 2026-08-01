@@ -10,14 +10,17 @@ The repository currently contains an early SQLite/GORM/FTS5 CLI and MCP demonstr
 
 A memory-first V2 redesign is active on `refactor/memory-core-v2`. The redesign intentionally permits breaking the demo schema, CLI, and MCP contracts because no production deployment or data migration must be preserved.
 
-Before contributing, read the authoritative checkpoint:
+Before contributing, read the authoritative checkpoint and live status first:
 
 - [Project Memory](docs/PROJECT_MEMORY.md)
+- [Current Status](docs/CURRENT_STATUS.md)
+- [V2 Implementation Tracker](https://github.com/mss-boot-io/meminfra/issues/11)
 - [Product Contract](docs/product-contract.md)
 - [Target Architecture](docs/architecture.md)
 - [V2 Data Model](docs/data-model-v2.md)
 - [Development Roadmap](docs/roadmap-v2.md)
 - [Evaluation Plan](docs/evaluation-v2.md)
+- [V1 Demo Baseline](docs/demo-baseline.md)
 
 ## What MemInfra Must Answer
 
@@ -121,8 +124,9 @@ A new maintainer or coding agent must:
 
 1. fetch `refactor/memory-core-v2`;
 2. read `docs/PROJECT_MEMORY.md` completely;
-3. inspect the latest commits and ADRs;
-4. resume the first incomplete item in the checkpoint;
-5. update the checkpoint before ending a substantial work session.
+3. read `docs/CURRENT_STATUS.md`;
+4. inspect issue #11, the latest commits, and active PR checks;
+5. resume the first incomplete exact-next-action item;
+6. update the live checkpoint before ending a substantial work session.
 
 This repository treats durable design memory as part of the product engineering process.
