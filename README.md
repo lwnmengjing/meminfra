@@ -1,142 +1,128 @@
 # MemInfra
 
-MemInfra is an AI-native infrastructure memory layer.
+MemInfra is an **AI-native operational memory for infrastructure**.
 
-The current MVP is intentionally local-first:
+It records timestamped infrastructure evidence, preserves provenance and causal context, derives current state and changes, and exposes explainable operational context to AI agents and human operators.
 
-- SQLite database
-- GORM-backed resource, observation, event, incident, and relationship storage
-- SQLite FTS5 memory search
-- CLI workflow
-- MCP stdio server for AI agents
+## Development Status
 
-FTS5 requires building the SQLite driver with the `sqlite_fts5` tag. The
-provided `Makefile` sets this for `make test` and `make build`.
+The repository currently contains an early SQLite/GORM/FTS5 CLI and MCP demonstration. It is **not production-ready and is not a compatibility contract**.
 
-## Installation
+A memory-first V2 redesign is active on `refactor/memory-core-v2`. The redesign intentionally permits breaking the demo schema, CLI, and MCP contracts because no production deployment or data migration must be preserved.
 
-For humans:
+Before contributing, read the authoritative checkpoint:
 
-```zsh
-script/install
-```
+- [Project Memory](docs/PROJECT_MEMORY.md)
+- [Product Contract](docs/product-contract.md)
+- [Target Architecture](docs/architecture.md)
+- [V2 Data Model](docs/data-model-v2.md)
+- [Development Roadmap](docs/roadmap-v2.md)
+- [Evaluation Plan](docs/evaluation-v2.md)
 
-For LLM agents, paste this instruction into Claude Code, Codex, OpenCode, Cursor, or another coding agent:
+## What MemInfra Must Answer
+
+MemInfra is designed to help an agent answer:
+
+1. What is the current known state of this resource?
+2. Which evidence supports that state, when was it observed, and how trustworthy is it?
+3. What changed recently?
+4. Which events, topology changes, decisions, and actions are correlated with the change?
+5. Have we seen a similar incident before?
+6. What action was taken, and what happened afterward?
+7. Is an older conclusion still valid for the current time and topology?
+
+Every meaningful answer must be traceable to stable evidence identifiers and must expose stale, conflicting, or missing information.
+
+## Core Principles
+
+- **Memory first:** durable evidence and its semantics are the product; CLI, MCP, and indexes are adapters.
+- **Observed truth:** state is derived from observations, events, probes, source systems, and operator actions.
+- **Temporal by default:** observed time, ingestion time, and validity are distinct.
+- **Append-only evidence:** corrections use supersession or retraction; projections are rebuildable.
+- **Explainable:** conclusions return supporting and contradicting evidence.
+- **Deterministic core before LLM reasoning:** ordering, freshness, conflicts, topology, and change detection are implemented in Go.
+- **Local first:** the first complete product runs over an inspectable SQLite database.
+- **Safe before autonomous:** early collectors are read-only and infrastructure execution is deferred.
+
+## Product Boundary
+
+MemInfra is not intended to become:
+
+- a Grafana or monitoring replacement;
+- a full CMDB;
+- a generic log platform;
+- a ticketing system;
+- a graph database;
+- an infrastructure-as-code engine;
+- an autonomous remediation platform;
+- a traditional Web administration dashboard.
+
+It imports and relates operational evidence from those systems; it does not replace them.
+
+## Target Operational Loop
 
 ```text
-Install and configure MemInfra by following:
-https://raw.githubusercontent.com/mss-boot-io/meminfra/main/docs/install.md
+Observe
+  -> Normalize and preserve evidence
+  -> Project state, changes, topology, and incident context
+  -> Retrieve and explain
+  -> Decide
+  -> Approve and act
+  -> Observe the result
+  -> Evaluate the outcome
+  -> Learn reusable operational memory
 ```
 
-One-line installer for the published repository:
+The initial production-capable target ends at **retrieve and explain**. Decisions, actions, and outcomes will first be recorded as memory before any execution automation is introduced.
 
-```zsh
-curl -fsSL https://raw.githubusercontent.com/mss-boot-io/meminfra/main/script/install | sh
-```
-
-Agent-specific install:
-
-```zsh
-script/install-agent --agents claude,codex,opencode --scope user
-```
-
-See [docs/install.md](docs/install.md) for all options.
-
-## CI/CD
-
-This repository ships with GitHub Actions for PR checks, main branch validation, release artifacts, CodeQL scanning, and Dependabot updates.
-
-Required checks recommended for `main`:
+## Target Architecture
 
 ```text
-CI / Validate
-CodeQL / Analyze Go
+CLI / MCP / importers
+          |
+     internal/core
+ domain rules, commands, queries, ports
+          |
+ repositories + projectors + retrievers
+          |
+ SQLite durable evidence + rebuildable projections + FTS5
 ```
 
-Release artifacts are built from tags such as `v0.1.0`.
+The V2 core must not depend on GORM, SQLite drivers, CLI packages, or MCP protocol types. Collectors must call core ingestion commands and must never write the database directly.
 
-See [docs/ci.md](docs/ci.md).
+## Roadmap Summary
 
-## Quick Start
+1. Freeze product contract, architecture, data model, evaluation, and repository memory.
+2. Build the immutable evidence kernel and real core boundaries.
+3. Add time-aware topology and derived change memory.
+4. Prove observed truth with Prometheus and WireGuard ingestion.
+5. Build incident context, hypotheses, decisions, actions, and outcomes.
+6. Deliver evidence-citing MCP tools such as `get_resource_state`, `get_resource_timeline`, `trace_evidence`, `explain_resource`, and `build_incident_context`.
+7. Consider controlled action execution only after read/explain quality is measured and stable.
 
-Build the CLI and MCP server:
+See [docs/roadmap-v2.md](docs/roadmap-v2.md) for milestone exit criteria.
+
+## Current Demo
+
+The current commands and MCP server remain useful only as implementation experiments while V2 is built. They may be removed or changed without migration support.
+
+The historical demo build still requires SQLite FTS5 and CGO:
 
 ```zsh
+make test
 make build
 ```
 
-This creates:
+Do not deploy the demo as an operational source of truth.
 
-```text
-bin/meminfra
-bin/meminfra-mcp
-```
+## Restarting Work
 
-Seed a local memory database:
+A new maintainer or coding agent must:
 
-```zsh
-bin/meminfra init --db ./meminfra.db
-bin/meminfra resource upsert --db ./meminfra.db --key node/frankfurt-01 --kind server --hostname frankfurt-01 --provider ovh --region fra --ipv4 192.0.2.10 --metadata '{"role":"edge"}'
-bin/meminfra observe add --db ./meminfra.db --resource node/frankfurt-01 --metric rtt_ms --value 82 --unit ms --source manual
-bin/meminfra event add --db ./meminfra.db --resource node/frankfurt-01 --type rtt_spike --data '{"region":"fra"}' --source manual
-bin/meminfra incident add --db ./meminfra.db --title "Frankfurt RTT spike" --symptoms "RTT increased" --root-cause "OVH upstream congestion" --solution "Shift traffic to London" --result "Latency recovered" --tags "frankfurt rtt ovh"
-bin/meminfra resource upsert --db ./meminfra.db --key node/london-01 --kind server --hostname london-01
-bin/meminfra relationship add --db ./meminfra.db --src node/frankfurt-01 --dst node/london-01 --type wg_tunnel --metadata '{"interface":"wg0"}'
-bin/meminfra search --db ./meminfra.db "Frankfurt RTT"
-```
+1. fetch `refactor/memory-core-v2`;
+2. read `docs/PROJECT_MEMORY.md` completely;
+3. inspect the latest commits and ADRs;
+4. resume the first incomplete item in the checkpoint;
+5. update the checkpoint before ending a substantial work session.
 
-Useful query commands:
-
-```zsh
-bin/meminfra resource get --db ./meminfra.db --key node/frankfurt-01 --output json
-bin/meminfra resource list --db ./meminfra.db --output json
-bin/meminfra observe list --db ./meminfra.db --resource node/frankfurt-01 --metric rtt_ms --output json
-bin/meminfra event list --db ./meminfra.db --resource node/frankfurt-01 --type rtt_spike --output json
-bin/meminfra incident list --db ./meminfra.db --output json
-bin/meminfra relationship list --db ./meminfra.db --resource node/frankfurt-01 --type wg_tunnel --output json
-bin/meminfra relationship topology --db ./meminfra.db --resource node/frankfurt-01 --direction out --output json
-```
-
-For agent-friendly output, add `--output json` to any command:
-
-```zsh
-bin/meminfra search --db ./meminfra.db --output json "Frankfurt RTT"
-```
-
-## MCP Server
-
-Run the local MCP stdio server:
-
-```zsh
-bin/meminfra-mcp --db ./meminfra.db
-```
-
-Example MCP client configuration:
-
-```json
-{
-  "mcpServers": {
-    "meminfra": {
-      "command": "/home/lwx/go/src/github.com/mss-boot-io/meminfra/bin/meminfra-mcp",
-      "args": [
-        "--db",
-        "/home/lwx/go/src/github.com/mss-boot-io/meminfra/meminfra.db"
-      ]
-    }
-  }
-}
-```
-
-Available MCP tools:
-
-```text
-search_memory
-list_resources
-get_resource
-query_topology
-list_observations
-list_events
-list_incidents
-```
-
-See `docs/mcp-contract.md` for the tool input and output contract.
+This repository treats durable design memory as part of the product engineering process.
