@@ -5,18 +5,19 @@
 Last updated: 2026-08-02
 Branch: `refactor/memory-core-v2`
 Pull request: #10 — `docs: redesign MemInfra around evidence-based operational memory`
-Stage: Milestone 0 design/reset
+Execution tracker: #11 — `V2 implementation tracker: evidence-based operational memory`
+Stage: Milestone 0 design/reset complete; awaiting review/merge
 
 ## Durable Checkpoint
 
-The initial anti-loss checkpoint was pushed first:
+The initial anti-loss checkpoint was pushed before all other redesign work:
 
 ```text
 2d9c43792f69334041698f28794df4963e9994b2
 docs: checkpoint MemInfra memory-first redesign
 ```
 
-The branch now contains the full V2 design package.
+That commit contains the complete product definition, principles, architecture, data model, roadmap, safety model, acceptance scenarios, and restart procedure needed to recover after a process restart.
 
 ## Completed
 
@@ -34,19 +35,63 @@ The branch now contains the full V2 design package.
 - [x] accept ADR 0004: rebuildable versioned projections;
 - [x] retire the contradictory V1 session-progress document;
 - [x] catalogue V1 structure, workflow baseline, and unresolved review defects;
-- [x] open Draft PR #10 against `main`;
-- [x] trigger pull-request CI and CodeQL.
+- [x] open PR #10 against `main`;
+- [x] create umbrella implementation tracker #11;
+- [x] run pull-request CI and CodeQL successfully on the complete design content.
 
 ## Validation
 
+### GitHub Actions Baseline
+
+Validated content head:
+
+```text
+4d4c78c1b0a79fdb02f854582bb638b0bf33a6db
+```
+
+CI run:
+
+```text
+CI #16 / Validate: success
+```
+
+Successful steps:
+
+- checkout;
+- Go setup;
+- module download;
+- formatting check;
+- module metadata/tidy check;
+- installer shell syntax;
+- installer configuration safety test;
+- Go tests;
+- Go builds;
+- installer smoke test;
+- binary artifact upload.
+
+Security run:
+
+```text
+CodeQL #27 / Analyze Go: success
+```
+
+The current status-only commit is newer than the validated content head. It changes no product code or design semantics and triggers its own PR checks; GitHub remains the authoritative source for the final head status.
+
+### Repository Checks
+
 Confirmed through GitHub repository operations:
 
-- every listed file exists on the redesign branch;
-- PR #10 contains 13 changed files at its first opened head;
+- all design and status files exist on the redesign branch;
+- PR #10 is open and mergeable;
 - branch commits were successfully pushed and fetched;
-- existing source and prior PR #1 review threads were inspected.
+- existing source and prior PR #1 review threads were inspected;
+- the V2 tracker exists as issue #11.
 
-Local checks not run:
+### Local Environment Limitation
+
+A direct local clone was attempted but not available because the execution environment could not resolve `github.com`.
+
+Therefore these checks were not independently rerun in the local container:
 
 ```text
 go test
@@ -55,18 +100,9 @@ installer smoke test
 SQLite runtime tests
 ```
 
-Reason: the available local execution environment could not resolve `github.com`, so repository clone and module retrieval failed. Do not reinterpret this as a successful local validation.
+They did run successfully in GitHub Actions as recorded above. Do not claim a separate local validation.
 
-Remote PR checks at the time this status file was created:
-
-```text
-CI: queued
-CodeQL: queued
-```
-
-Fetch the current PR head and workflow runs before relying on these statuses.
-
-## Known V1 Review Concerns to Preserve as V2 Requirements
+## Known V1 Review Concerns Preserved as V2 Requirements
 
 - stable snake_case CLI/MCP JSON DTOs;
 - JSON-RPC parse errors include `id: null`;
@@ -78,16 +114,24 @@ These are correctness requirements, not V1 compatibility promises.
 
 ## Current Design Decision
 
-No product code has been changed in the redesign PR. The next implementation must start at the memory kernel, not at collectors, MCP expansion, HTTP, UI, or actions.
+No product code has been changed in PR #10. The redesign deliberately stops after establishing the product and engineering contract.
+
+The next implementation must start at the memory kernel. It must not begin with collectors, MCP expansion, HTTP, UI, vector retrieval, incident feature growth, or action execution.
 
 ## Exact Next Action
 
-1. Inspect CI and CodeQL for the latest PR head.
-2. Fix any documentation/CI issue introduced by the redesign.
-3. Mark PR #10 ready for review when checks are green or accurately documented.
-4. Merge the design/reset PR after review.
-5. Start Milestone 1 Slice 1.1: package-boundary skeleton and architecture fitness test.
-6. Update this file with the new branch, commit, checks, and next action before ending the next work session.
+1. Verify the final PR-head CI and CodeQL checks after this status-only commit.
+2. Mark PR #10 ready for review.
+3. Review and merge the design/reset PR.
+4. Create the first implementation branch from the updated `main`.
+5. Implement Milestone 1 Slice 1.1 only:
+   - package/dependency skeleton;
+   - core ports;
+   - typed application errors;
+   - clock and ID generator interfaces;
+   - bootstrap composition root;
+   - architecture dependency-boundary test.
+6. Update this file with the new branch, commit, checks, risks, and exact next action before ending that work session.
 
 ## Resume Rules
 
@@ -95,7 +139,7 @@ After any restart:
 
 1. read `docs/PROJECT_MEMORY.md`;
 2. read this file;
-3. inspect PR #10 and the latest five commits;
+3. inspect PR #10, issue #11, and the latest five commits;
 4. verify the actual branch head and check status;
 5. continue the first incomplete exact-next-action item;
 6. never assume planned code exists until confirmed in the repository.
