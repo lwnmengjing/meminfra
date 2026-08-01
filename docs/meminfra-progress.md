@@ -1,263 +1,83 @@
-# MemInfra Progress Memory
+# MemInfra V1 Demo Progress — Historical Record
 
-Last updated: 2026-05-09
+> **Historical and non-authoritative.** This file no longer defines current architecture, roadmap, environment, or next work.
+>
+> Replaced on 2026-08-02 by:
+>
+> - [`PROJECT_MEMORY.md`](PROJECT_MEMORY.md)
+> - [`product-contract.md`](product-contract.md)
+> - [`architecture.md`](architecture.md)
+> - [`data-model-v2.md`](data-model-v2.md)
+> - [`roadmap-v2.md`](roadmap-v2.md)
+> - [`evaluation-v2.md`](evaluation-v2.md)
+> - [`adr/0001-memory-first-redesign.md`](adr/0001-memory-first-redesign.md)
 
-## Project Memory
+## Historical Scope
 
-MemInfra is an AI-native infrastructure memory layer.
+The V1 repository was an unused demonstration created in May 2026. It proved that the following components could be connected:
 
-It is not intended to be a traditional monitoring dashboard, CMDB, or Grafana replacement. The first-class user is an AI agent such as Codex, Claude Code, OpenCode, Cursor, or an MCP client.
+- Go CLI;
+- SQLite through GORM;
+- FTS5 search;
+- resource, observation, event, incident, and relationship tables;
+- one-hop topology queries;
+- text and JSON CLI output;
+- a minimal read-oriented MCP stdio server;
+- installation and GitHub Actions scaffolding.
 
-Core principles:
+The demo had no production deployment, data, or compatibility requirement.
 
-- AI Native: the system stores infrastructure state in forms that agents can query and reason over.
-- MCP First later: MCP is the intended AI access protocol, but it is not part of the current MVP.
-- Local First: a single SQLite database is the primary memory store.
-- Observed Truth: infrastructure truth comes from observations, events, probes, metrics, and operator actions, not only cloud APIs.
-- No traditional UI for MVP: CLI and future MCP tools are the interaction layer.
+## Why V1 Was Replaced as the Design Contract
 
-Long-term direction:
+V1 centered mutable entity CRUD and a large persistence service. The nominal `internal/core` mostly forwarded to `internal/store`, while the store owned validation, defaulting, policy, transactions, projections, and search writes.
 
-- Observe infrastructure.
-- Analyze state and history.
-- Decide on likely causes or changes.
-- Act through controlled automation.
-- Learn from outcomes and preserve operational memory.
+The result was useful as a technical spike but did not yet implement the defining MemInfra semantics:
 
-## Current MVP Scope
+- immutable evidence;
+- observed versus ingestion versus validity time;
+- source provenance and confidence;
+- conflict, retraction, and supersession;
+- rebuildable state/change/topology projections;
+- evidence-linked hypotheses, decisions, actions, and outcomes;
+- deterministic explanation context.
 
-The active MVP is intentionally small:
+V2 therefore permits breaking the V1 schema, CLI, and MCP contracts.
 
-- Go CLI runtime.
-- SQLite storage through `gorm.io/driver/sqlite` and `gorm.io/gorm`.
-- Resources, observations, events, and memory documents.
-- SQLite FTS5 search over memory documents.
-- No HTTP API.
-- No MCP adapter.
-- No discovery engine.
-- No reconciliation loop.
-- Incident memory and relationship memory are implemented as first-class local memory surfaces, but there is no automated RCA workflow yet.
+## Historical Implementation Summary
 
-## Implemented So Far
+V1 included:
 
-Project files added:
-
-- `go.mod` and `go.sum`
-- `Makefile`
-- `README.md`
-- `.gitignore`
-- `cmd/meminfra/main.go`
-- `internal/model/models.go`
-- `internal/store/store.go`
-- `internal/store/store_test.go`
-
-Implemented behavior:
-
-- `meminfra init --db PATH`
-  - Opens SQLite and applies GORM migrations.
-  - Creates the FTS5 virtual table.
-- `meminfra resource upsert`
-  - Inserts or updates resources by `resource_key`.
-  - Preserves `first_seen`.
-  - Updates `last_seen`.
-  - Refreshes the resource search document.
-- `meminfra resource get/list`
-  - Reads resources by key or lists recent resources.
-- `meminfra observe add`
-  - Records numeric observations for existing resources.
-  - Creates searchable observation memory documents.
-- `meminfra observe get/list`
-  - Reads observations by ID or lists recent observations with optional resource/metric filters.
-- `meminfra event add`
-  - Records events for existing resources.
-  - Creates searchable event memory documents.
-- `meminfra event get/list`
-  - Reads events by ID or lists recent events with optional resource/type filters.
-- `meminfra incident add`
-  - Records operational incident experience.
-  - Creates searchable incident memory documents.
-- `meminfra incident get/list`
-  - Reads incidents by ID or lists recent incidents.
-- `meminfra relationship add`
-  - Records infrastructure relationships between two resources.
-  - Creates searchable relationship memory documents.
-- `meminfra relationship get/list`
-  - Reads relationships by ID or lists recent relationships with optional resource/type filters.
-- `meminfra search`
-  - Queries SQLite FTS5 and returns matching memory documents.
-- All commands support `--output text|json`
-  - `text` remains the default for humans.
-  - `json` is intended for Codex/OpenCode/Claude Code and future MCP/HTTP adapters.
-
-## Data Model
-
-Current tables:
-
-- `resources`
-  - `resource_key`, `kind`, `hostname`, `ipv4`, `ipv6`, `provider`, `region`, `source`, `metadata_json`, `first_seen`, `last_seen`
-- `observations`
-  - `resource_id`, `metric`, `value`, `unit`, `source`, `metadata_json`, `observed_at`
-- `events`
-  - `resource_id`, `event_type`, `event_data_json`, `source`, `created_at`
-- `incidents`
-  - `title`, `symptoms`, `root_cause`, `solution`, `result`, `tags`, `source`, `metadata_json`, `created_at`, `updated_at`
-- `relationships`
-  - `src_resource_id`, `dst_resource_id`, `relation_type`, `source`, `metadata_json`, `created_at`, `updated_at`
-- `memory_documents`
-  - `doc_type`, `ref_id`, `title`, `body`, `tags`, `created_at`, `updated_at`
-- `memory_fts`
-  - FTS5 virtual table with `title`, `body`, `tags`
-
-FTS implementation note:
-
-- FTS5 is maintained manually as an independent virtual table.
-- It is not using SQLite external-content mode.
-- This avoids malformed index behavior observed during early tests with manual delete/insert against an external-content table.
-
-## Environment Memory
-
-The preferred shell for future work is zsh:
-
-```zsh
-/usr/bin/zsh
+```text
+resources
+observations
+events
+incidents
+relationships
+memory_documents
+memory_fts
 ```
 
-The Codex process may not have Go in `PATH`. Use absolute Go tool paths:
+It exposed CLI commands for adding, listing, getting, searching, and querying one-hop relationships, plus MCP tools for search and read/list operations.
 
-```zsh
-/home/lwx/.g/go/bin/go
-/home/lwx/.g/go/bin/gofmt
-```
+The exact historical implementation remains available in Git history before `refactor/memory-core-v2`.
 
-Known local Go environment:
+## Historical Validation Claims
 
-- Go version: `go1.26.0 linux/amd64`
-- `CGO_ENABLED=1`
-- `GOPROXY=https://goproxy.cn,https://proxy.golang.org,direct`
-- `GOROOT=/home/lwx/.g/versions/1.26.0`
-- `GOPATH=/home/lwx/go`
+The earlier session record reported successful Go format/build/test and CLI smoke checks in its original environment in May 2026. Those results are historical only and do not establish the current branch state.
 
-Sandbox note:
+Current validation must be recorded in `PROJECT_MEMORY.md` with the commit and environment actually checked.
 
-- Default Go build cache under `/home/lwx/.cache/go-build` was read-only from Codex.
-- Default module cache under `/home/lwx/go/pkg/mod` was also not writable from Codex.
-- Use `/tmp` caches when running Go commands from Codex:
+## Known Demo Review Items
 
-```zsh
-GOCACHE=/tmp/meminfra-go-build GOMODCACHE=/tmp/meminfra-go-mod /home/lwx/.g/go/bin/go test -tags sqlite_fts5 ./...
-```
+PR #1 retained unresolved review comments that should be considered when V2 adapter behavior is implemented:
 
-## Build And Test Memory
+- CLI search JSON used Go field names instead of the project’s snake_case JSON convention;
+- JSON-RPC parse errors could omit `id` instead of returning `id: null`;
+- the MCP server version was hard-coded;
+- installation documentation did not clearly state CGO/C toolchain prerequisites for the selected demo driver.
 
-FTS5 requires the `sqlite_fts5` build tag because `gorm.io/driver/sqlite` uses `github.com/mattn/go-sqlite3` underneath.
+These are not V2 compatibility requirements, but the corresponding correctness concerns remain valid.
 
-Use:
+## Current Source of Truth
 
-```zsh
-make test
-make build
-```
-
-Equivalent explicit commands:
-
-```zsh
-GOCACHE=/tmp/meminfra-go-build GOMODCACHE=/tmp/meminfra-go-mod /home/lwx/.g/go/bin/go test -tags sqlite_fts5 ./...
-GOCACHE=/tmp/meminfra-go-build GOMODCACHE=/tmp/meminfra-go-mod /home/lwx/.g/go/bin/go build -tags sqlite_fts5 -o /tmp/meminfra ./cmd/meminfra
-```
-
-Verified on 2026-05-08:
-
-- `go mod tidy`: passed after using `/tmp` caches and approved network access.
-- `go test -tags sqlite_fts5 ./...`: passed.
-- `go build -tags sqlite_fts5 -o /tmp/meminfra ./cmd/meminfra`: passed.
-- CLI smoke test passed with:
-  - `init`
-  - `resource upsert`
-  - `observe add`
-  - `event add`
-  - `search`
-
-Review fixes applied on 2026-05-08:
-
-- FTS search now converts user input into safe quoted FTS phrases before `MATCH`.
-- IPv6-style queries such as `2001:db8::1` are covered by tests and CLI smoke validation.
-- JSON text fields are strict: invalid `metadata_json` and `event_data_json` inputs are rejected before persistence.
-- Subcommand `-h` output is visible and exits successfully.
-
-Progress on 2026-05-09:
-
-- Added `--output json` support to `init`, `resource upsert`, `observe add`, `event add`, and `search`.
-- Added CLI tests that parse JSON output and verify unsupported output formats fail clearly.
-- Fixed JSON output DTOs so `metadata_json` and `event_data_json` are embedded JSON values, not double-encoded strings.
-- Fixed parent command help for `resource -h`, `observe -h`, and `event -h`.
-- Added a friendly `--value is required` error for `observe add` when no value is supplied.
-- Simplified FTS query builder signature after confirming it cannot currently fail.
-- Added first-class incident memory with `meminfra incident add`, an `incidents` table, FTS indexing, JSON output, and tests.
-- Added `get/list` commands and store methods for resources, observations, events, and incidents.
-- Direction calibration: current implementation is still aligned with the original MemInfra MVP, but CLI and store are becoming too large. Next code changes should move business behavior behind `internal/core` before adding more surfaces.
-- Review fix: list commands with a missing resource filter now return empty results instead of `resource not found`.
-- Review fix: invalid child command usage now mentions all available subcommands.
-- Review fix: `make test` and `make build` now pass Go subcommand arguments in the correct order.
-- Added `internal/core` as the application service layer. The CLI now depends on core instead of store directly.
-- Added first-class relationship memory with `meminfra relationship add/get/list`, a `relationships` table, FTS indexing, JSON output, and tests.
-- Split `cmd/meminfra` into focused command files by command family plus shared output/common helpers. CLI behavior is unchanged, but future command growth no longer has to pass through one large `main.go`.
-- Added `internal/index` for memory document projection and safe FTS query construction. Store now owns persistence while index owns searchable text shaping.
-- Added topology-style relationship query helpers with `QueryTopology` and `meminfra relationship topology`. Supports resource-centered one-hop traversal, `in`/`out`/`both` direction filtering, relationship type filtering, text output, and JSON output.
-- Added a minimal MCP stdio server at `cmd/meminfra-mcp` with `initialize`, `ping`, `tools/list`, and `tools/call`.
-- Added MCP tools: `search_memory`, `list_resources`, `get_resource`, `query_topology`, `list_observations`, `list_events`, and `list_incidents`.
-- Updated `make build` to produce both `bin/meminfra` and `bin/meminfra-mcp`.
-- Added `docs/mcp-contract.md` and README MCP setup notes.
-- Added one-click installation scripts: `script/install` for binaries/database plus optional agent setup, and `script/install-agent` for Claude Code, Codex, and OpenCode MCP configuration.
-- Added `docs/install.md` with human and LLM-agent installation flows modeled after agent-friendly open source projects.
-- Switched the public module/repository identity to `github.com/mss-boot-io/meminfra`.
-- Added GitHub Actions workflows for PR/main CI, tag release artifacts, CodeQL scanning, and Dependabot updates.
-- Added `docs/ci.md` with recommended `main` branch protection checks.
-- Review fix: agent installer no longer overwrites existing `.mcp.json` or `opencode.jsonc`; it prints merge snippets instead.
-- Review fix: Makefile now defaults to portable `go` and `gofmt` commands.
-- Review fix: search limits are capped consistently and SQLite foreign keys are enabled on open.
-
-Smoke database path used:
-
-```zsh
-/tmp/meminfra-smoke.db
-```
-
-## Important Decisions
-
-- SQLite driver must be `gorm.io/driver/sqlite`.
-- GORM is used for ordinary table schema and CRUD.
-- Raw SQL is used for FTS5 virtual table creation and search.
-- JSON payload fields are stored as `text` columns for now.
-- No `gorm.io/datatypes` dependency is used in the current implementation.
-- The MVP stores resource, observation, event, incident, and relationship content into generic `memory_documents` so future MCP retrieval can build on the same search surface.
-
-## Current Git State
-
-The repository started empty.
-
-Current work is uncommitted and consists of new project files. No previous user code was modified.
-
-Before committing, run:
-
-```zsh
-git status --short
-make test
-```
-
-## Recommended Next Steps
-
-Next implementation slice:
-
-- Add MCP write tools only after the read/query contract has been exercised by an agent.
-- Consider separating validation/defaulting from `internal/store` into `internal/core` as the next cleanup step.
-- Before first public release, finalize the GitHub repository URL in installation docs and add release artifacts/checksums.
-
-Future larger slices:
-
-- Discovery engine.
-- Reconciliation loop.
-- HTTP JSON API.
-- MCP adapter.
-- Incident/RCA workflow.
-- Relationship graph.
-- Prometheus/WireGuard/SSH importers.
+Read [`PROJECT_MEMORY.md`](PROJECT_MEMORY.md) before changing the project. Resume from its current checkpoint and the active V2 roadmap, not from this historical file.
