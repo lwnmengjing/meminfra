@@ -2,7 +2,7 @@ GO ?= go
 GOFMT ?= gofmt
 GOFLAGS ?= -tags sqlite_fts5
 
-.PHONY: fmt fmt-check tidy test build install installer-test ci
+.PHONY: fmt fmt-check tidy vet test build install installer-test ci
 
 fmt:
 	$(GOFMT) -w ./cmd ./internal
@@ -12,6 +12,9 @@ fmt-check:
 
 tidy:
 	$(GO) mod tidy
+
+vet:
+	$(GO) vet $(GOFLAGS) ./...
 
 test:
 	$(GO) test $(GOFLAGS) ./...
@@ -23,7 +26,7 @@ build:
 install:
 	script/install --source-dir .
 
-ci: fmt-check installer-test test build
+ci: fmt-check installer-test vet test build
 
 installer-test:
 	sh script/install-agent-test.sh
