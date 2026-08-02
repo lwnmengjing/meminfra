@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mss-boot-io/meminfra/internal/core"
+	"github.com/mss-boot-io/meminfra/internal/legacy/core"
 )
 
 func runObserve(ctx context.Context, args []string, stdout io.Writer) error {
