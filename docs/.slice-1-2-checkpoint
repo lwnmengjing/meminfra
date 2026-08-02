@@ -1,0 +1,4 @@
+branch=refactor/memory-kernel-v2-s1-2
+stage=milestone-1-slice-1.2
+code_commit=36c64e3ef046783178a7e61500aca25459665751
+next=run-pr-ci-and-codeql
