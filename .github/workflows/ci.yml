@@ -41,6 +41,9 @@ jobs:
           go mod tidy
           git diff --exit-code go.mod go.sum
 
+      - name: Vet
+        run: make vet GO=go
+
       - name: Check installer shell syntax
         run: |
           sh -n script/install
