@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mss-boot-io/meminfra/internal/core"
+	"github.com/mss-boot-io/meminfra/internal/legacy/core"
 )
 
 func openAndMigrate(ctx context.Context, dbPath string) (*core.Service, error) {

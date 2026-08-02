@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mss-boot-io/meminfra/internal/core"
+	"github.com/mss-boot-io/meminfra/internal/legacy/core"
 )
 
 const protocolVersion = "2025-06-18"
