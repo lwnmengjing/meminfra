@@ -3,51 +3,56 @@
 > Live execution checkpoint. Read this immediately after `PROJECT_MEMORY.md` when resuming work.
 
 Last updated: 2026-08-02
-Branch: `refactor/memory-kernel-v2-s1-1`
-Pull request: #12 — `refactor(core): establish V2 application boundary`
+Active integration branch: `main`
+Last completed pull request: #12 — `refactor(core): establish V2 application boundary`
 Execution tracker: #11 — `V2 implementation tracker: evidence-based operational memory`
-Stage: Milestone 1 / Slice 1.1 implemented and fully validated; awaiting final PR merge
+Stage: Milestone 1 / Slice 1.1 merged; Slice 1.2 is the next implementation unit
 
-## Durable Design Baseline
+## Durable Baselines
 
-The memory-first redesign was merged through PR #10:
+Memory-first design/reset:
 
 ```text
 d03c6b5f22fba30fae1a3d6e20e5c3d53805d6fe
 Merge pull request #10 from mss-boot-io/refactor/memory-core-v2
 ```
 
-The original anti-loss design checkpoint remains:
+V2 application boundary:
+
+```text
+54d8c4e58d203a7a673b6932c688ddf99f36d7d7
+Merge pull request #12 from mss-boot-io/refactor/memory-kernel-v2-s1-1
+```
+
+Original anti-loss design checkpoint:
 
 ```text
 2d9c43792f69334041698f28794df4963e9994b2
 docs: checkpoint MemInfra memory-first redesign
 ```
 
-Read `docs/PROJECT_MEMORY.md` and ADRs 0001–0004 before changing V2 semantics.
+Read `docs/PROJECT_MEMORY.md`, issue #11, and ADRs 0001–0004 before changing V2 semantics.
 
-## Completed in Slice 1.1
+## Slice 1.1 — Completed and Merged
 
-- [x] merge the V2 design/reset into `main`;
-- [x] create `refactor/memory-kernel-v2-s1-1` from the merged design baseline;
-- [x] move the V1 store-forwarding service from `internal/core` to `internal/legacy/core`;
-- [x] preserve the existing CLI and MCP demo by routing them through the legacy package;
-- [x] create a new persistence- and protocol-independent `internal/core`;
-- [x] define foundational `Clock`, `IDGenerator`, and `TransactionManager` ports;
-- [x] add `core.Application` construction and validated port delegation;
-- [x] add stable typed application errors independent of adapters;
-- [x] preserve typed adapter/application errors through core boundaries;
-- [x] add `internal/app/bootstrap` as the composition root;
-- [x] close adapter resources once and in reverse construction order;
-- [x] establish adapter, ingestion, and projection package namespaces;
-- [x] add an architecture fitness test for the V2 core boundary;
-- [x] reject every repository-local import outside `internal/core` from the core;
-- [x] explicitly reject CLI, HTTP, MCP, database, GORM, SQLite, and gRPC dependencies from the core;
-- [x] test the dependency policy itself against allowed and forbidden examples;
-- [x] add `go vet` as a mandatory Makefile and pull-request CI gate;
-- [x] open PR #12 and complete full test, vet, build, installer, and CodeQL validation.
+PR #12 completed the first implementation slice:
 
-## Commit Sequence
+- [x] isolated the V1 store-forwarding service under `internal/legacy/core`;
+- [x] preserved existing CLI and MCP demo behavior through the legacy boundary;
+- [x] replaced `internal/core` with a persistence- and protocol-independent V2 core;
+- [x] introduced foundational `Clock`, `IDGenerator`, and `TransactionManager` ports;
+- [x] added `core.Application` construction and validated port delegation;
+- [x] added typed application errors independent of adapters;
+- [x] added `internal/app/bootstrap` as the composition root;
+- [x] made adapter shutdown idempotent and reverse-ordered;
+- [x] established adapter, ingestion, and projection package namespaces;
+- [x] added executable architecture dependency rules;
+- [x] prohibited every repository-local outward import from `internal/core`;
+- [x] explicitly prohibited CLI, HTTP, MCP, gRPC, database, GORM, and SQLite dependencies from the core;
+- [x] added policy self-tests for the architecture guard;
+- [x] added full-repository `go vet` to Makefile and pull-request CI.
+
+Important implementation commits retained in merge history:
 
 ```text
 ee47791f64289f9cc5c78e527909401343bf9cdd
@@ -66,13 +71,33 @@ a4e1c31d35a879fa841c978784c2680b7f72c195
 ci: enforce Go vet on pull requests
 ```
 
-Documentation checkpoint commits are intentionally separate from code commits. The commit containing this file is newer than the validated code head and changes no Go behavior.
+## Validation of Slice 1.1
 
-## Validation
+Final PR head:
 
-### Focused Local Validation
+```text
+692ba54106a194806aae5c708062a7f07e533d23
+```
 
-The dependency-free V2 packages were formatted and tested in an isolated local workspace:
+Remote validation on that exact head:
+
+```text
+CI #25 / Validate: success
+CodeQL #36 / Analyze Go: success
+```
+
+The successful CI gates included:
+
+- formatting;
+- module metadata/tidy verification;
+- full-repository `go vet` with SQLite FTS5 build tags;
+- installer shell syntax and configuration safety;
+- all Go tests;
+- both CLI and MCP binary builds;
+- installer smoke test;
+- binary artifact upload.
+
+Focused dependency-free V2 packages were also formatted and tested in an isolated local workspace:
 
 ```text
 go test ./internal/core \
@@ -85,53 +110,15 @@ go test ./internal/core \
 
 Result: passed.
 
-The strengthened architecture policy was rerun after adding the repository-wide outward-import rule and policy self-tests. Result: passed.
+A complete local repository clone was not available because the execution container could not resolve `github.com`. The full dependency graph was therefore validated by GitHub Actions; no separate full local run is claimed.
 
-A complete local clone remains unavailable in the execution container because DNS resolution for `github.com` fails. The full dependency graph was therefore validated by GitHub Actions rather than claimed as a separate local run.
-
-### Full GitHub Actions Validation
-
-Validated code and CI-policy head:
-
-```text
-a4e1c31d35a879fa841c978784c2680b7f72c195
-```
-
-CI:
-
-```text
-CI #24 / Validate: success
-```
-
-Successful gates:
-
-- checkout and Go setup;
-- module download;
-- formatting check;
-- module metadata/tidy check;
-- full-repository `go vet` with the SQLite FTS5 build tag;
-- installer shell syntax;
-- installer configuration safety test;
-- all Go tests, including the new core, bootstrap, and architecture tests;
-- both CLI and MCP binary builds;
-- installer smoke test;
-- binary artifact upload.
-
-Security:
-
-```text
-CodeQL #35 / Analyze Go: success
-```
-
-Earlier implementation heads also passed CI and CodeQL before the architecture policy and vet gate were strengthened.
-
-## Architecture Boundary Now Enforced
+## Enforced Architecture Rule
 
 `internal/core` may import:
 
-- the Go standard library except concrete adapter/protocol packages explicitly forbidden by policy;
+- ordinary domain-safe Go standard-library packages;
 - its own `internal/core/...` subpackages;
-- future third-party domain-only libraries after review.
+- future third-party domain-only libraries after explicit review.
 
 It may not import:
 
@@ -143,51 +130,52 @@ It may not import:
 - concrete SQLite drivers;
 - V1 model, store, index, legacy, CLI, or MCP code.
 
-This is executable policy in `internal/architecture/dependencies_test.go`, not documentation only.
+The rule is executable in `internal/architecture/dependencies_test.go`.
 
-## Preserved V1 Behavior
+## Temporary V1 Boundary
 
-The existing demonstration remains buildable and tested through:
+The existing demonstration remains under:
 
 ```text
 internal/legacy/core
 ```
 
-This is a temporary migration boundary, not a V2 contract. V1 code must be removed incrementally when equivalent V2 adapters and use cases replace it. New product behavior must never be added to the legacy service.
+It is temporary and is not a V2 contract. Do not add new product behavior to it. Remove legacy paths only when an equivalent V2 vertical slice replaces and validates the behavior.
 
-## Scope Still Not Implemented
+## Slice 1.2 — Exact Scope
 
-- evidence/domain identifiers;
-- resource-key rules;
-- observed, ingested, and validity time types;
-- evidence status and confidence semantics;
-- typed evidence payloads;
-- SQLite V2 migrations;
-- append-evidence commands and repositories;
-- projection implementations;
+The next implementation branch must implement domain primitives only:
+
+- opaque typed IDs for workspace, resource, evidence, incident, correlation, and change;
+- stable textual prefixes and strict parsing/validation;
+- resource-key parsing, normalization, and invariants;
+- evidence kind enum;
+- evidence status enum;
+- confidence value validation in `[0, 1]`;
+- observed, ingested, and validity time value types;
+- source type and source reference value types;
+- JSON and text round-trip behavior;
+- table-driven invariant and malformed-input tests.
+
+Slice 1.2 must not introduce:
+
+- evidence payload schemas;
+- SQLite V2 migrations or repositories;
 - collectors;
-- V2 CLI/MCP product tools;
-- incident learning;
-- action execution.
+- new product MCP tools;
+- HTTP or Web UI;
+- vector retrieval;
+- incident feature expansion;
+- infrastructure action execution.
 
 ## Exact Next Action
 
-1. Verify CI and CodeQL on the final documentation-only PR head.
-2. Mark PR #12 ready for review.
-3. Merge PR #12 with its full commit history.
-4. Update issue #11 to mark the package/dependency skeleton and architecture fitness test complete.
-5. Update this checkpoint on merged `main` with the actual merge SHA.
-6. Create a new branch from updated `main` for Milestone 1 / Slice 1.2.
-7. Implement domain primitives only:
-   - opaque typed IDs for workspace, resource, evidence, incident, correlation, and change;
-   - resource-key parsing and normalization;
-   - evidence kind and status enums;
-   - confidence validation;
-   - observed/ingested/validity time types;
-   - source/provenance value types;
-   - JSON/text round-trip and invariant tests.
-8. Do not add SQLite schema, collectors, MCP tools, HTTP/UI, vector retrieval, or action execution in Slice 1.2.
-9. Update this file again before ending the next substantial work session.
+1. Verify the push CI and CodeQL status for this merged-main checkpoint commit.
+2. Create `refactor/memory-kernel-v2-s1-2` from the resulting current `main`.
+3. Implement only the Slice 1.2 domain primitives listed above.
+4. Keep all new domain code inside `internal/core/...` so the architecture guard applies.
+5. Run formatting, full-repository vet/test/build/installer checks, CodeQL, and focused invariant tests.
+6. Update issue #11 and this file with actual commits, validation, risks, and the next slice before ending that work session.
 
 ## Resume Rules
 
@@ -195,7 +183,7 @@ After any restart:
 
 1. read `docs/PROJECT_MEMORY.md`;
 2. read this file;
-3. inspect PR #12, issue #11, and the latest five commits;
-4. verify the actual branch head and workflow status;
+3. inspect issue #11 and the latest five commits on `main`;
+4. verify actual workflow status rather than relying only on recorded status;
 5. continue the first incomplete item in `Exact Next Action`;
-6. never assume planned code exists until confirmed in the repository.
+6. never infer planned implementation from documentation alone.
