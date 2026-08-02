@@ -3,135 +3,184 @@
 > Live execution checkpoint. Read this immediately after `PROJECT_MEMORY.md` when resuming work.
 
 Last updated: 2026-08-02
-Branch: `refactor/memory-core-v2`
-Pull request: #10 — `docs: redesign MemInfra around evidence-based operational memory`
+Branch: `refactor/memory-kernel-v2-s1-1`
+Pull request: #12 — `refactor(core): establish V2 application boundary`
 Execution tracker: #11 — `V2 implementation tracker: evidence-based operational memory`
-Stage: Milestone 0 design/reset complete; awaiting review/merge
+Stage: Milestone 1 / Slice 1.1 implemented and validated; awaiting final PR review/merge
 
-## Durable Checkpoint
+## Durable Design Baseline
 
-The initial anti-loss checkpoint was pushed before all other redesign work:
+The memory-first redesign was merged through PR #10:
+
+```text
+d03c6b5f22fba30fae1a3d6e20e5c3d53805d6fe
+Merge pull request #10 from mss-boot-io/refactor/memory-core-v2
+```
+
+The original anti-loss design checkpoint remains:
 
 ```text
 2d9c43792f69334041698f28794df4963e9994b2
 docs: checkpoint MemInfra memory-first redesign
 ```
 
-That commit contains the complete product definition, principles, architecture, data model, roadmap, safety model, acceptance scenarios, and restart procedure needed to recover after a process restart.
+Read `docs/PROJECT_MEMORY.md` and ADRs 0001–0004 before changing V2 semantics.
 
-## Completed
+## Completed in Slice 1.1
 
-- [x] create `refactor/memory-core-v2` from `main` at `0426749be268a40754ff062341b2087a9cb04f9a`;
-- [x] commit and push authoritative project memory before other work;
-- [x] redefine README and product boundary;
-- [x] add focused product contract;
-- [x] replace architecture with core/adapter/projection design;
-- [x] define immutable evidence and V2 projection data model;
-- [x] add milestone roadmap with slice-level acceptance criteria;
-- [x] define deterministic canonical scenarios and evaluation gates;
-- [x] accept ADR 0001: memory-first breaking redesign;
-- [x] accept ADR 0002: append-only evidence;
-- [x] accept ADR 0003: SQLite local-first storage;
-- [x] accept ADR 0004: rebuildable versioned projections;
-- [x] retire the contradictory V1 session-progress document;
-- [x] catalogue V1 structure, workflow baseline, and unresolved review defects;
-- [x] open PR #10 against `main`;
-- [x] create umbrella implementation tracker #11;
-- [x] run pull-request CI and CodeQL successfully on the complete design content.
+- [x] merge the V2 design/reset into `main`;
+- [x] create `refactor/memory-kernel-v2-s1-1` from the merged design baseline;
+- [x] move the V1 store-forwarding service from `internal/core` to `internal/legacy/core`;
+- [x] preserve the existing CLI and MCP demo by routing them through the legacy package;
+- [x] create a new persistence- and protocol-independent `internal/core`;
+- [x] define foundational `Clock`, `IDGenerator`, and `TransactionManager` ports;
+- [x] add `core.Application` construction and validated port delegation;
+- [x] add stable typed application errors independent of adapters;
+- [x] preserve typed adapter/application errors through core boundaries;
+- [x] add `internal/app/bootstrap` as the composition root;
+- [x] close adapter resources once and in reverse construction order;
+- [x] establish adapter, ingestion, and projection package namespaces;
+- [x] add an architecture fitness test for the V2 core boundary;
+- [x] reject every repository-local import outside `internal/core` from the core;
+- [x] explicitly reject CLI, HTTP, MCP, database, GORM, SQLite, and gRPC dependencies from the core;
+- [x] test the dependency policy itself against allowed and forbidden examples;
+- [x] open PR #12 and complete full CI and CodeQL validation.
+
+## Commit Sequence
+
+```text
+ee47791f64289f9cc5c78e527909401343bf9cdd
+refactor: isolate V1 demo service behind legacy package
+
+9387d352fb9a2e6b5b2dc71987063ef52b240491
+feat(core): add V2 application boundary skeleton
+
+27c812ced750091f2e8e3f5bd96378d4a2a5ae66
+test(architecture): reject all outward core dependencies
+```
+
+The status-only commit containing this file is newer than the validated code head and changes no Go behavior.
 
 ## Validation
 
-### GitHub Actions Baseline
+### Focused Local Validation
 
-Validated content head:
-
-```text
-4d4c78c1b0a79fdb02f854582bb638b0bf33a6db
-```
-
-CI run:
+The dependency-free V2 packages were formatted and tested in an isolated local workspace:
 
 ```text
-CI #16 / Validate: success
+go test ./internal/core \
+  ./internal/app/bootstrap \
+  ./internal/architecture \
+  ./internal/adapters \
+  ./internal/ingest \
+  ./internal/projection
 ```
 
-Successful steps:
+Result: passed.
 
-- checkout;
-- Go setup;
+The strengthened architecture policy was rerun after adding the repository-wide outward-import rule and its policy test. Result: passed.
+
+### Full GitHub Actions Validation
+
+Validated code head:
+
+```text
+27c812ced750091f2e8e3f5bd96378d4a2a5ae66
+```
+
+CI:
+
+```text
+CI #21 / Validate: success
+```
+
+Successful checks include:
+
+- checkout and Go setup;
 - module download;
 - formatting check;
 - module metadata/tidy check;
 - installer shell syntax;
 - installer configuration safety test;
-- Go tests;
-- Go builds;
+- all Go tests, including the new architecture and core tests;
+- both CLI and MCP binary builds;
 - installer smoke test;
 - binary artifact upload.
 
-Security run:
+Security:
 
 ```text
-CodeQL #27 / Analyze Go: success
+CodeQL #32 / Analyze Go: success
 ```
 
-The current status-only commit is newer than the validated content head. It changes no product code or design semantics and triggers its own PR checks; GitHub remains the authoritative source for the final head status.
-
-### Repository Checks
-
-Confirmed through GitHub repository operations:
-
-- all design and status files exist on the redesign branch;
-- PR #10 is open and mergeable;
-- branch commits were successfully pushed and fetched;
-- existing source and prior PR #1 review threads were inspected;
-- the V2 tracker exists as issue #11.
+The earlier implementation head `9387d352fb9a2e6b5b2dc71987063ef52b240491` also passed CI #20 and CodeQL #31 before the architecture policy was strengthened.
 
 ### Local Environment Limitation
 
-A direct local clone was attempted but not available because the execution environment could not resolve `github.com`.
+A complete local clone remains unavailable in the execution container because DNS resolution for `github.com` fails. Therefore the full dependency graph was not independently retested locally. GitHub Actions is the authoritative full-repository validation; the focused dependency-free packages were independently tested locally as recorded above.
 
-Therefore these checks were not independently rerun in the local container:
+## Architecture Boundary Now Enforced
+
+`internal/core` may import:
+
+- the Go standard library, except concrete adapter/protocol packages explicitly forbidden by policy;
+- its own `internal/core/...` subpackages;
+- future third-party domain-only libraries after review.
+
+It may not import:
+
+- any other package in this repository;
+- `database/sql`;
+- CLI frameworks or `flag`;
+- HTTP, gRPC, or MCP protocol packages;
+- GORM;
+- concrete SQLite drivers;
+- V1 model, store, index, legacy, CLI, or MCP code.
+
+This is executable policy in `internal/architecture/dependencies_test.go`, not documentation only.
+
+## Preserved V1 Behavior
+
+The current demo remains buildable and tested through:
 
 ```text
-go test
-go build
-installer smoke test
-SQLite runtime tests
+internal/legacy/core
 ```
 
-They did run successfully in GitHub Actions as recorded above. Do not claim a separate local validation.
+This is a temporary migration boundary, not a V2 contract. V1 code must be removed incrementally when equivalent V2 adapters and use cases replace it. New product behavior must never be added to the legacy service.
 
-## Known V1 Review Concerns Preserved as V2 Requirements
+## Scope Still Not Implemented
 
-- stable snake_case CLI/MCP JSON DTOs;
-- JSON-RPC parse errors include `id: null`;
-- MCP server version is build-derived;
-- install documentation states actual toolchain prerequisites;
-- numeric/ID inputs are bounded before narrowing conversions.
-
-These are correctness requirements, not V1 compatibility promises.
-
-## Current Design Decision
-
-No product code has been changed in PR #10. The redesign deliberately stops after establishing the product and engineering contract.
-
-The next implementation must start at the memory kernel. It must not begin with collectors, MCP expansion, HTTP, UI, vector retrieval, incident feature growth, or action execution.
+- evidence/domain identifiers;
+- resource-key rules;
+- observed, ingested, and validity time types;
+- evidence status and confidence semantics;
+- typed evidence payloads;
+- SQLite V2 migrations;
+- append-evidence commands and repositories;
+- projection implementations;
+- collectors;
+- V2 CLI/MCP product tools;
+- incident learning;
+- action execution.
 
 ## Exact Next Action
 
-1. Verify the final PR-head CI and CodeQL checks after this status-only commit.
-2. Mark PR #10 ready for review.
-3. Review and merge the design/reset PR.
-4. Create the first implementation branch from the updated `main`.
-5. Implement Milestone 1 Slice 1.1 only:
-   - package/dependency skeleton;
-   - core ports;
-   - typed application errors;
-   - clock and ID generator interfaces;
-   - bootstrap composition root;
-   - architecture dependency-boundary test.
-6. Update this file with the new branch, commit, checks, risks, and exact next action before ending that work session.
+1. Verify CI and CodeQL on the final status-only PR head.
+2. Mark PR #12 ready for review.
+3. Review and merge PR #12 with its full commit history.
+4. Update issue #11 to mark Slice 1.1 complete.
+5. Create a new branch from updated `main` for Milestone 1 / Slice 1.2.
+6. Implement domain primitives only:
+   - opaque typed IDs for workspace, resource, evidence, incident, correlation, and change;
+   - resource-key parsing and normalization;
+   - evidence kind and status enums;
+   - confidence validation;
+   - observed/ingested/validity time types;
+   - source/provenance value types;
+   - JSON/text round-trip and invariant tests.
+7. Do not add SQLite schema, collectors, MCP tools, HTTP/UI, vector retrieval, or action execution in Slice 1.2.
+8. Update this file again before ending the next substantial work session.
 
 ## Resume Rules
 
@@ -139,7 +188,7 @@ After any restart:
 
 1. read `docs/PROJECT_MEMORY.md`;
 2. read this file;
-3. inspect PR #10, issue #11, and the latest five commits;
-4. verify the actual branch head and check status;
-5. continue the first incomplete exact-next-action item;
+3. inspect PR #12, issue #11, and the latest five commits;
+4. verify the actual branch head and workflow status;
+5. continue the first incomplete item in `Exact Next Action`;
 6. never assume planned code exists until confirmed in the repository.
